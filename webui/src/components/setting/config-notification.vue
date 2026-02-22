@@ -219,7 +219,7 @@ function getFieldsForType(type: string) {
 
 <template>
   <ab-fold-panel :title="$t('config.notification_set.title')">
-    <div space-y-4>
+    <div space-y-8>
       <!-- Global enable switch -->
       <ab-setting
         config-key="enable"
@@ -230,67 +230,67 @@ function getFieldsForType(type: string) {
       />
 
       <!-- Provider list -->
-      <div v-if="notificationEnabled" space-y-3>
+      <div v-if="notificationEnabled" space-y-8>
         <div
           v-for="(provider, index) in providers"
           :key="index"
-          class="provider-card"
+          class="provider-item"
           :class="{ 'provider-disabled': !provider.enabled }"
         >
-          <div flex items-center gap-3>
-            <div :class="getProviderIcon(provider.type)" text-xl />
-            <div flex-1>
-              <div font-medium>{{ getProviderLabel(provider.type) }}</div>
-              <div text-sm op-60>
-                {{
-                  provider.enabled
-                    ? $t('config.notification_set.enabled')
-                    : $t('config.notification_set.disabled')
-                }}
-              </div>
+          <div class="provider-info">
+            <div class="provider-name">
+              <div :class="getProviderIcon(provider.type)" />
+              {{ getProviderLabel(provider.type) }}
+              <span v-if="!provider.enabled" class="disabled-badge">
+                {{ $t('config.notification_set.disabled') }}
+              </span>
             </div>
-            <div flex items-center gap-2>
-              <button
-                class="btn-icon"
-                :disabled="testingIndex === index"
-                :title="$t('config.notification_set.test')"
-                @click="testProvider(index)"
-              >
-                <div
-                  v-if="testingIndex === index"
-                  i-carbon-circle-dash
-                  animate-spin
-                />
-                <div v-else i-carbon-play />
-              </button>
-              <button
-                class="btn-icon"
-                :title="$t('config.notification_set.edit')"
-                @click="openEditDialog(index)"
-              >
-                <div i-carbon-edit />
-              </button>
-              <button
-                class="btn-icon"
-                :title="
-                  provider.enabled
-                    ? $t('config.notification_set.disable')
-                    : $t('config.notification_set.enable_provider')
-                "
-                @click="toggleProvider(index)"
-              >
-                <div
-                  :class="provider.enabled ? 'i-carbon-view' : 'i-carbon-view-off'"
-                />
-              </button>
-              <button
-                class="btn-icon btn-danger"
-                :title="$t('config.notification_set.remove')"
-                @click="removeProvider(index)"
-              >
-                <div i-carbon-trash-can />
-              </button>
-            </div>
+          </div>
+          <div class="provider-actions">
+            <ab-button
+              size="small"
+              type="secondary"
+              :disabled="testingIndex === index"
+              :title="$t('config.notification_set.test')"
+              @click="testProvider(index)"
+            >
+              <div
+                v-if="testingIndex === index"
+                i-carbon-circle-dash
+                animate-spin
+              />
+              <div v-else i-carbon-play />
+            </ab-button>
+            <ab-button
+              size="small"
+              type="secondary"
+              :title="$t('config.notification_set.edit')"
+              @click="openEditDialog(index)"
+            >
+              <div i-carbon-edit />
+            </ab-button>
+            <ab-button
+              size="small"
+              type="secondary"
+              :title="
+                provider.enabled
+                  ? $t('config.notification_set.disable')
+                  : $t('config.notification_set.enable_provider')
+              "
+              @click="toggleProvider(index)"
+            >
+              <div
+                :class="provider.enabled ? 'i-carbon-view' : 'i-carbon-view-off'"
+              />
+            </ab-button>
+            <ab-button
+              size="small"
+              type="warn"
+              :title="$t('config.notification_set.remove')"
+              @click="removeProvider(index)"
+            >
+              <div i-carbon-trash-can />
+            </ab-button>
           </div>
         </div>
 
@@ -303,48 +303,68 @@ function getFieldsForType(type: string) {
           {{ testResult.message }}
         </div>
 
+        <div line></div>
+
         <!-- Add provider button -->
-        <button class="btn-add" @click="openAddDialog">
-          <div i-carbon-add />
-          {{ $t('config.notification_set.add_provider') }}
-        </button>
+        <div flex="~ justify-end">
+          <ab-button size="small" type="primary" @click="openAddDialog">
+            <div i-carbon-add />
+            {{ $t('config.notification_set.add_provider') }}
+          </ab-button>
+        </div>
       </div>
     </div>
 
     <!-- Add Dialog -->
-    <ab-dialog
-      v-model:visible="showAddDialog"
+    <ab-popup
+      v-model:show="showAddDialog"
       :title="$t('config.notification_set.add_provider')"
-      @confirm="addProvider"
+      css="w-400"
     >
-      <div space-y-4>
-        <div>
-          <label class="field-label">{{ $t('config.notification_set.type') }}</label>
-          <select v-model="newProvider.type" class="field-input">
+      <div space-y-16>
+        <ab-label :label="$t('config.notification_set.type')">
+          <select v-model="newProvider.type" ab-input>
             <option v-for="pt in providerTypes" :key="pt.value" :value="pt.value">
               {{ pt.label }}
             </option>
           </select>
-        </div>
-        <div v-for="field in getFieldsForType(newProvider.type)" :key="field.key">
-          <label class="field-label">{{ field.label }}</label>
+        </ab-label>
+
+        <ab-label
+          v-for="field in getFieldsForType(newProvider.type)"
+          :key="field.key"
+          :label="field.label"
+        >
           <input
             v-if="field.key !== 'template'"
             v-model="(newProvider as any)[field.key]"
             :placeholder="field.placeholder"
-            class="field-input"
+            ab-input
           />
           <textarea
             v-else
             v-model="(newProvider as any)[field.key]"
             :placeholder="field.placeholder"
-            class="field-input field-textarea"
+            ab-input
+            class="field-textarea"
             rows="3"
           />
+        </ab-label>
+
+        <div
+          v-if="testResult"
+          class="test-result"
+          :class="testResult.success ? 'test-success' : 'test-error'"
+        >
+          {{ testResult.message }}
         </div>
-        <div flex items-center justify-between>
-          <button
-            class="btn-test"
+
+        <div line></div>
+
+        <div flex="~ justify-between items-center">
+          <ab-button
+            size="small"
+            type="secondary"
             :disabled="testingIndex === -999"
             @click="testNewProvider"
           >
@@ -355,52 +375,69 @@ function getFieldsForType(type: string) {
             />
             <div v-else i-carbon-play />
             {{ $t('config.notification_set.test') }}
-          </button>
-          <div
-            v-if="testResult"
-            :class="testResult.success ? 'text-green-500' : 'text-red-500'"
-            text-sm
-          >
-            {{ testResult.message }}
+          </ab-button>
+          <div flex="~ gap-8">
+            <ab-button size="small" type="warn" @click="showAddDialog = false">
+              {{ $t('config.cancel') }}
+            </ab-button>
+            <ab-button size="small" type="primary" @click="addProvider">
+              {{ $t('config.apply') }}
+            </ab-button>
           </div>
         </div>
       </div>
-    </ab-dialog>
+    </ab-popup>
 
     <!-- Edit Dialog -->
-    <ab-dialog
-      v-model:visible="showEditDialog"
+    <ab-popup
+      v-model:show="showEditDialog"
       :title="$t('config.notification_set.edit_provider')"
-      @confirm="saveProvider"
+      css="w-400"
     >
-      <div space-y-4>
-        <div>
-          <label class="field-label">{{ $t('config.notification_set.type') }}</label>
-          <select v-model="newProvider.type" class="field-input" disabled>
+      <div space-y-16>
+        <ab-label :label="$t('config.notification_set.type')">
+          <select v-model="newProvider.type" ab-input disabled>
             <option v-for="pt in providerTypes" :key="pt.value" :value="pt.value">
               {{ pt.label }}
             </option>
           </select>
-        </div>
-        <div v-for="field in getFieldsForType(newProvider.type)" :key="field.key">
-          <label class="field-label">{{ field.label }}</label>
+        </ab-label>
+
+        <ab-label
+          v-for="field in getFieldsForType(newProvider.type)"
+          :key="field.key"
+          :label="field.label"
+        >
           <input
             v-if="field.key !== 'template'"
             v-model="(newProvider as any)[field.key]"
             :placeholder="field.placeholder"
-            class="field-input"
+            ab-input
           />
           <textarea
             v-else
             v-model="(newProvider as any)[field.key]"
             :placeholder="field.placeholder"
-            class="field-input field-textarea"
+            ab-input
+            class="field-textarea"
             rows="3"
           />
+        </ab-label>
+
+        <div
+          v-if="testResult"
+          class="test-result"
+          :class="testResult.success ? 'test-success' : 'test-error'"
+        >
+          {{ testResult.message }}
         </div>
-        <div flex items-center justify-between>
-          <button
-            class="btn-test"
+
+        <div line></div>
+
+        <div flex="~ justify-between items-center">
+          <ab-button
+            size="small"
+            type="secondary"
             :disabled="testingIndex === -999"
             @click="testNewProvider"
           >
@@ -411,69 +448,107 @@ function getFieldsForType(type: string) {
             />
             <div v-else i-carbon-play />
             {{ $t('config.notification_set.test') }}
-          </button>
-          <div
-            v-if="testResult"
-            :class="testResult.success ? 'text-green-500' : 'text-red-500'"
-            text-sm
-          >
-            {{ testResult.message }}
+          </ab-button>
+          <div flex="~ gap-8">
+            <ab-button size="small" type="warn" @click="showEditDialog = false">
+              {{ $t('config.cancel') }}
+            </ab-button>
+            <ab-button size="small" type="primary" @click="saveProvider">
+              {{ $t('config.apply') }}
+            </ab-button>
           </div>
         </div>
       </div>
-    </ab-dialog>
+    </ab-popup>
   </ab-fold-panel>
 </template>
 
-<style scoped>
-.provider-card {
-  @apply p-3 rounded-lg bg-gray-100 dark:bg-gray-800 transition-opacity;
+<style lang="scss" scoped>
+.provider-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-surface-elevated, #f9fafb);
+  border-radius: 8px;
+  transition: background-color var(--transition-normal), opacity var(--transition-normal);
+
+  :root.dark & {
+    background: var(--color-surface-elevated, #1f2937);
+  }
 }
 
 .provider-disabled {
-  @apply opacity-50;
+  opacity: 0.5;
 }
 
-.btn-icon {
-  @apply p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors;
+.provider-info {
+  flex: 1;
+  min-width: 0;
 }
 
-.btn-danger {
-  @apply hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500;
+.provider-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.btn-add {
-  @apply w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600
-         flex items-center justify-center gap-2 hover:border-primary hover:text-primary
-         transition-colors cursor-pointer;
+.disabled-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-danger);
+  color: white;
+  opacity: 0.8;
 }
 
-.btn-test {
-  @apply px-3 py-1.5 rounded bg-primary text-white flex items-center gap-2 hover:bg-primary-dark
-         disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-}
+.provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 
-.field-label {
-  @apply block text-sm font-medium mb-1;
-}
+  :deep(.btn--small) {
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
 
-.field-input {
-  @apply w-full p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800;
+  :deep(.n-spin-container),
+  :deep(.n-spin-content) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .field-textarea {
-  @apply resize-none font-mono text-sm;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
 }
 
 .test-result {
-  @apply p-2 rounded text-sm;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
 }
 
 .test-success {
-  @apply bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300;
+  color: var(--color-success, #22c55e);
+  background: color-mix(in srgb, var(--color-success, #22c55e) 10%, transparent);
 }
 
 .test-error {
-  @apply bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300;
+  color: var(--color-danger, #ef4444);
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 10%, transparent);
 }
 </style>
