@@ -16,10 +16,10 @@ router.beforeEach(async (to) => {
     try {
       const status = await apiSetup.getStatus();
       needSetup = status.need_setup;
+      setupChecked = true;
     } catch {
-      // If check fails, proceed normally
+      // If check fails, retry on next navigation
     }
-    setupChecked = true;
   }
 
   // Redirect to setup if needed

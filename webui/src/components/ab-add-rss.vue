@@ -30,6 +30,61 @@ const loading = reactive({
   subscribe: false,
 });
 
+const { execute: addRssAggregate } = useApi(apiRSS.add, {
+  showMessage: true,
+  onBeforeExecute() {
+    loading.analyze = true;
+  },
+  onSuccess() {
+    show.value = false;
+  },
+  onFinally() {
+    loading.analyze = false;
+  },
+});
+
+const { execute: analyzeRss } = useApi(apiDownload.analysis, {
+  showMessage: true,
+  onBeforeExecute() {
+    loading.analyze = true;
+  },
+  onSuccess(res) {
+    rule.value = res;
+    step.value = 'confirm';
+  },
+  onFinally() {
+    loading.analyze = false;
+  },
+});
+
+const { execute: executeCollect } = useApi(apiDownload.collection, {
+  showMessage: true,
+  onBeforeExecute() {
+    loading.collect = true;
+  },
+  onSuccess() {
+    getAll();
+    show.value = false;
+  },
+  onFinally() {
+    loading.collect = false;
+  },
+});
+
+const { execute: executeSubscribe } = useApi(apiDownload.subscribe, {
+  showMessage: true,
+  onBeforeExecute() {
+    loading.subscribe = true;
+  },
+  onSuccess() {
+    getAll();
+    show.value = false;
+  },
+  onFinally() {
+    loading.subscribe = false;
+  },
+});
+
 // Computed
 const posterSrc = computed(() => resolvePosterUrl(rule.value.poster_link));
 
@@ -82,34 +137,9 @@ function addRss() {
   }
 
   if (rss.value.aggregate) {
-    // Aggregate mode: directly add RSS
-    useApi(apiRSS.add, {
-      showMessage: true,
-      onBeforeExecute() {
-        loading.analyze = true;
-      },
-      onSuccess() {
-        show.value = false;
-      },
-      onFinally() {
-        loading.analyze = false;
-      },
-    }).execute(rss.value);
+    addRssAggregate(rss.value);
   } else {
-    // Single mode: analyze and show confirm
-    useApi(apiDownload.analysis, {
-      showMessage: true,
-      onBeforeExecute() {
-        loading.analyze = true;
-      },
-      onSuccess(res) {
-        rule.value = res;
-        step.value = 'confirm';
-      },
-      onFinally() {
-        loading.analyze = false;
-      },
-    }).execute(rss.value);
+    analyzeRss(rss.value);
   }
 }
 
@@ -146,36 +176,12 @@ async function autoDetectOffset() {
 
 function collect() {
   if (!rule.value) return;
-  useApi(apiDownload.collection, {
-    showMessage: true,
-    onBeforeExecute() {
-      loading.collect = true;
-    },
-    onSuccess() {
-      getAll();
-      show.value = false;
-    },
-    onFinally() {
-      loading.collect = false;
-    },
-  }).execute(rule.value);
+  executeCollect(rule.value);
 }
 
 function subscribe() {
   if (!rule.value) return;
-  useApi(apiDownload.subscribe, {
-    showMessage: true,
-    onBeforeExecute() {
-      loading.subscribe = true;
-    },
-    onSuccess() {
-      getAll();
-      show.value = false;
-    },
-    onFinally() {
-      loading.subscribe = false;
-    },
-  }).execute(rule.value, rss.value);
+  executeSubscribe(rule.value, rss.value);
 }
 </script>
 

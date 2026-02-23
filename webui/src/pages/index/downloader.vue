@@ -24,17 +24,20 @@ const isNull = computed(() => {
   return config.value.downloader.host === '';
 });
 
+const isActive = ref(false);
 const { pause, resume } = useIntervalFn(getAll, 5000, { immediate: false });
 
 onActivated(async () => {
+  isActive.value = true;
   await getConfig();
-  if (!isNull.value) {
+  if (isActive.value && !isNull.value) {
     getAll();
     resume();
   }
 });
 
 onDeactivated(() => {
+  isActive.value = false;
   pause();
   clearSelection();
 });

@@ -151,6 +151,7 @@
       "delete": "Delete",
       "delete_hit": "Delete Local File?",
       "disable": "Disable",
+      "edit": "Edit",
       "edit_rule": "Edit Rule",
       "enable": "Enable",
       "enable_hit": "Do you want to enable this rule?",

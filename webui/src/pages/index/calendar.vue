@@ -25,6 +25,7 @@ async function refreshCalendar() {
 }
 
 onActivated(() => {
+  if (refreshing.value) return;
   refreshCalendar();
 });
 

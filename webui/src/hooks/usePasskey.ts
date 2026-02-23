@@ -15,12 +15,7 @@ export const usePasskey = createSharedComposable(() => {
   // 状态
   const passkeys = ref<PasskeyItem[]>([]);
   const loading = ref(false);
-  const isSupported = ref(false);
-
-  // 检测浏览器支持
-  onMounted(() => {
-    isSupported.value = isWebAuthnSupported();
-  });
+  const isSupported = ref(isWebAuthnSupported());
 
   // 加载 Passkey 列表
   async function loadPasskeys() {

@@ -9,14 +9,6 @@ export const useAuth = createSharedComposable(() => {
 
   const isLoggedIn = useLocalStorage('isLoggedIn', false);
 
-  watch(isLoggedIn, (v) => {
-    if (v) {
-      router.replace({ name: 'Index' });
-    } else {
-      router.replace({ name: 'Login' });
-    }
-  });
-
   const user = reactive<User>({
     username: '',
     password: '',
@@ -51,6 +43,7 @@ export const useAuth = createSharedComposable(() => {
         isLoggedIn.value = true;
         clearUser();
         message.success(t('notify.login_success'));
+        router.replace({ name: 'Index' });
       })
       .catch((err: ApiError) => {
         if (err.status === 404) {
@@ -64,6 +57,7 @@ export const useAuth = createSharedComposable(() => {
     onSuccess() {
       clearUser();
       isLoggedIn.value = false;
+      router.replace({ name: 'Login' });
     },
   });
 

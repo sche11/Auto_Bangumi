@@ -151,6 +151,7 @@
       "delete": "删除",
       "delete_hit": "是否删除本地文件？",
       "disable": "禁用",
+      "edit": "编辑",
       "edit_rule": "编辑规则",
       "enable": "启用",
       "enable_hit": "确定启用该规则？",

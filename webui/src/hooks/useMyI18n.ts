@@ -16,18 +16,20 @@ function normalizeLocale(locale: string): Languages {
   return 'en';
 }
 
+export const i18n = createI18n({
+  legacy: false,
+  locale: normalizeLocale(navigator.language),
+  fallbackLocale: 'en',
+  messages,
+});
+
 export const useMyI18n = createSharedComposable(() => {
   const lang = useLocalStorage<Languages>(
     'lang',
     normalizeLocale(navigator.language)
   );
 
-  const i18n = createI18n({
-    legacy: false,
-    locale: lang.value,
-    fallbackLocale: 'en',
-    messages,
-  });
+  i18n.global.locale.value = lang.value as unknown as Languages;
 
   watch(lang, (val) => {
     i18n.global.locale.value = val as unknown as Languages;

@@ -27,6 +27,12 @@ export const useLogStore = defineStore('log', () => {
     immediateCallback: true,
   });
 
+  watch(isLoggedIn, (loggedIn) => {
+    if (!loggedIn) {
+      offUpdate();
+    }
+  });
+
   const { copy: clipboardCopy, isSupported: clipboardSupported } = useClipboard({
     legacy: true,
   });
