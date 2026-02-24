@@ -7,13 +7,30 @@ logger = logging.getLogger(__name__)
 
 EPISODE_RE = re.compile(r"\d+")
 TITLE_RE = re.compile(
-    r"(.*?|\[.*])((?: ?-)? ?\d+ |\[\d+]|\[\d+.?[vV]\d]|第\d+[话話集]|\[第?\d+[话話集]]|\[\d+.?END]|[Ee][Pp]?\d+)(.*)"
+    r"(.*?|\[.*])((?: ?-) ?\d+ |\[\d+]|\[\d+.?[vV]\d]|第\d+[话話集]|\[第?\d+[话話集]]|\[\d+.?END]|[Ee][Pp]?\d+)(.*)"
 )
 RESOLUTION_RE = re.compile(r"1080|720|2160|4K")
 SOURCE_RE = re.compile(r"B-Global|[Bb]aha|[Bb]ilibili|AT-X|Web")
 SUB_RE = re.compile(r"[简繁日字幕]|CH|BIG5|GB")
 
+FALLBACK_EP_PATTERNS = [
+    re.compile(r" (\d+) ?(?=\[)"),       # #876/#910: digits before [
+    re.compile(r"\[(\d+)\(\d+\)\]"),      # #773: [02(57)]
+]
+
 PREFIX_RE = re.compile(r"[^\w\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff-]")
+
+
+def _fallback_parse(content_title: str) -> tuple | None:
+    """Try fallback regex patterns when TITLE_RE fails."""
+    for pattern in FALLBACK_EP_PATTERNS:
+        m = pattern.search(content_title)
+        if m:
+            season_info = content_title[: m.start()].strip()
+            episode_info = m.group(1)
+            other = content_title[m.end() :].strip()
+            return season_info, episode_info, other
+    return None
 
 CHINESE_NUMBER_MAP = {
     "一": 1,
@@ -96,6 +113,10 @@ def name_process(name: str):
         elif re.search(" - {1}", name) is not None:
             split = re.split("-", name)
     if len(split) == 1:
+        # Titles like "29 岁单身..." — digits + Chinese are one title
+        if re.match(r"\d+\s[\u4e00-\u9fa5]", split[0]):
+            name_zh = split[0].strip()
+            return name_en, name_zh, name_jp
         split_space = split[0].split(" ")
         for idx in [0, -1]:
             if re.search(r"^[\u4e00-\u9fa5]{2,}", split_space[idx]) is not None:
@@ -140,12 +161,13 @@ def process(raw_title: str):
     group = get_group(content_title)
     # 翻译组的名字
     match_obj = TITLE_RE.match(content_title)
-    if match_obj is None:
-        return None
-    # 处理标题
-    season_info, episode_info, other = list(
-        map(lambda x: x.strip(), match_obj.groups())
-    )
+    if match_obj is not None:
+        season_info, episode_info, other = [x.strip() for x in match_obj.groups()]
+    else:
+        fallback = _fallback_parse(content_title)
+        if fallback is None:
+            return None
+        season_info, episode_info, other = fallback
     process_raw = prefix_process(season_info, group)
     # 处理 前缀
     raw_name, season_raw, season = season_process(process_raw)
