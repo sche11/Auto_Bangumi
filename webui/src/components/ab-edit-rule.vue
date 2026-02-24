@@ -82,16 +82,23 @@ const infoTags = computed(() => {
 });
 
 // Copy RSS link
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
+
 async function copyRssLink() {
   const rssLink = localRule.value.rss_link?.[0] || '';
   if (rssLink) {
     await navigator.clipboard.writeText(rssLink);
     copied.value = true;
-    setTimeout(() => {
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
       copied.value = false;
     }, 2000);
   }
 }
+
+onBeforeUnmount(() => {
+  clearTimeout(copyTimer);
+});
 
 // Auto detect offset using the new detectOffset API
 async function autoDetectOffset() {

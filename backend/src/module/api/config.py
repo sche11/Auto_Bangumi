@@ -14,11 +14,12 @@ _SENSITIVE_KEYS = ("password", "api_key", "token", "secret")
 
 
 def _sanitize_dict(d: dict) -> dict:
+    """Recursively mask string values whose keys contain sensitive keywords."""
     result = {}
     for k, v in d.items():
         if isinstance(v, dict):
             result[k] = _sanitize_dict(v)
-        elif any(s in k.lower() for s in _SENSITIVE_KEYS):
+        elif isinstance(v, str) and any(s in k.lower() for s in _SENSITIVE_KEYS):
             result[k] = "********"
         else:
             result[k] = v
@@ -27,6 +28,7 @@ def _sanitize_dict(d: dict) -> dict:
 
 @router.get("/get", dependencies=[Depends(get_current_user)])
 async def get_config():
+    """Return the current configuration with sensitive fields masked."""
     return _sanitize_dict(settings.dict())
 
 
@@ -34,6 +36,7 @@ async def get_config():
     "/update", response_model=APIResponse, dependencies=[Depends(get_current_user)]
 )
 async def update_config(config: Config):
+    """Persist and reload configuration from the supplied payload."""
     try:
         settings.save(config_dict=config.dict())
         settings.load()

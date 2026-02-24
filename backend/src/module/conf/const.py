@@ -1,4 +1,8 @@
 # -*- encoding: utf-8 -*-
+# DEFAULT_SETTINGS: factory defaults written to config.json on first run.
+# ENV_TO_ATTR: maps AB_* environment variables to Config model attribute paths.
+#   Values are either a string attr name, a (attr_name, converter) tuple, or a
+#   list of such tuples when a single env var sets multiple attributes.
 DEFAULT_SETTINGS = {
     "program": {
         "rss_time": 900,
@@ -45,6 +49,20 @@ DEFAULT_SETTINGS = {
         "api_version": "2023-05-15",
         "model": "gpt-3.5-turbo",
         "deployment_id": "",
+    },
+    "security": {
+        "login_whitelist": [],
+        "login_tokens": [],
+        "mcp_whitelist": [
+            "127.0.0.0/8",
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "::1/128",
+            "fe80::/10",
+            "fc00::/7",
+        ],
+        "mcp_tokens": [],
     },
 }
 
@@ -99,8 +117,11 @@ ENV_TO_ATTR = {
 
 
 class BCOLORS:
+    """ANSI colour helpers for terminal output."""
+
     @staticmethod
     def _(color: str, *args: str) -> str:
+        """Wrap *args* in the given ANSI colour code and reset at the end."""
         strings = [str(s) for s in args]
         return f"{color}{', '.join(strings)}{BCOLORS.ENDC}"
 

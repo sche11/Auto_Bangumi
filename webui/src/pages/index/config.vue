@@ -49,6 +49,7 @@ onActivated(() => {
         <config-player></config-player>
         <config-openai></config-openai>
         <config-passkey></config-passkey>
+        <config-security></config-security>
       </div>
     </div>
 

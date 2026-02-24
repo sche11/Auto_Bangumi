@@ -24,6 +24,7 @@ export interface BangumiRule {
   title_raw: string;
   year: string | null;
   air_weekday: number | null; // 0=Mon, 1=Tue, ..., 6=Sun, null=Unknown
+  weekday_locked: boolean;
   needs_review: boolean;
   needs_review_reason: string | null;
 }
@@ -63,6 +64,7 @@ export const ruleTemplate: BangumiRule = {
   title_raw: '',
   year: null,
   air_weekday: null,
+  weekday_locked: false,
   needs_review: false,
   needs_review_reason: null,
 };

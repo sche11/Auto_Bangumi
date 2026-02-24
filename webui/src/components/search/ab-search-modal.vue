@@ -27,6 +27,7 @@ const {
   getProviders,
   onSearch,
   clearSearch,
+  closeSearch,
   selectResult,
   clearSelectedResult,
 } = useSearchStore();
@@ -60,6 +61,11 @@ const expandedCategories = ref<Set<'group' | 'resolution' | 'subtitle' | 'season
 
 // Track which bangumi groups have expanded variants
 const expandedVariants = ref<Set<string>>(new Set());
+
+// Close EventSource on unmount (prevents leak if navigating away mid-search)
+onBeforeUnmount(() => {
+  closeSearch();
+});
 
 // Close on Escape
 onKeyStroke('Escape', () => {

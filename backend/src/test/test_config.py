@@ -8,14 +8,16 @@ from unittest.mock import patch
 
 from module.models.config import (
     Config,
-    Program,
     Downloader,
-    RSSParser,
-    BangumiManage,
-    Proxy,
     Notification as NotificationConfig,
+    NotificationProvider,
+    Program,
+    Proxy,
+    RSSParser,
+    Security,
 )
 from module.conf.config import Settings
+from module.conf.const import BCOLORS, DEFAULT_SETTINGS
 
 
 # ---------------------------------------------------------------------------
@@ -228,3 +230,281 @@ class TestEnvOverrides:
                 s.init()
 
         assert "192.168.1.100:9090" in s.downloader.host
+
+
+# ---------------------------------------------------------------------------
+# Security model
+# ---------------------------------------------------------------------------
+
+
+class TestSecurityModel:
+    def test_security_defaults(self):
+        """Security has empty whitelists and token lists by default."""
+        sec = Security()
+        assert sec.login_whitelist == []
+        assert sec.login_tokens == []
+        assert sec.mcp_whitelist == []
+        assert sec.mcp_tokens == []
+
+    def test_security_in_config(self):
+        """Config includes a Security section with correct defaults."""
+        config = Config()
+        assert hasattr(config, "security")
+        assert isinstance(config.security, Security)
+        assert config.security.login_whitelist == []
+
+    def test_security_populated(self):
+        """Security fields accept lists of CIDRs and tokens."""
+        sec = Security(
+            login_whitelist=["192.168.0.0/16"],
+            login_tokens=["token-abc"],
+            mcp_whitelist=["10.0.0.0/8"],
+            mcp_tokens=["mcp-secret"],
+        )
+        assert "192.168.0.0/16" in sec.login_whitelist
+        assert "token-abc" in sec.login_tokens
+        assert "10.0.0.0/8" in sec.mcp_whitelist
+        assert "mcp-secret" in sec.mcp_tokens
+
+    def test_security_roundtrip_serialization(self):
+        """Security serializes and deserializes correctly."""
+        original = Security(
+            login_whitelist=["127.0.0.0/8"],
+            mcp_tokens=["tok1"],
+        )
+        data = original.model_dump()
+        restored = Security.model_validate(data)
+        assert restored.login_whitelist == ["127.0.0.0/8"]
+        assert restored.mcp_tokens == ["tok1"]
+
+
+# ---------------------------------------------------------------------------
+# NotificationProvider model
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationProvider:
+    def test_minimal_provider(self):
+        """NotificationProvider requires only type."""
+        p = NotificationProvider(type="telegram")
+        assert p.type == "telegram"
+        assert p.enabled is True
+
+    def test_telegram_provider_fields(self):
+        """Telegram provider stores token and chat_id."""
+        p = NotificationProvider(type="telegram", token="bot123", chat_id="-100456")
+        assert p.token == "bot123"
+        assert p.chat_id == "-100456"
+
+    def test_discord_provider_fields(self):
+        """Discord provider stores webhook_url."""
+        p = NotificationProvider(
+            type="discord", webhook_url="https://discord.com/api/webhooks/123/abc"
+        )
+        assert p.webhook_url == "https://discord.com/api/webhooks/123/abc"
+
+    def test_bark_provider_fields(self):
+        """Bark provider stores server_url and device_key."""
+        p = NotificationProvider(
+            type="bark", server_url="https://api.day.app", device_key="mykey"
+        )
+        assert p.server_url == "https://api.day.app"
+        assert p.device_key == "mykey"
+
+    def test_pushover_provider_fields(self):
+        """Pushover provider stores user_key and api_token."""
+        p = NotificationProvider(type="pushover", user_key="uk1", api_token="at1")
+        assert p.user_key == "uk1"
+        assert p.api_token == "at1"
+
+    def test_url_field_property(self):
+        """Webhook provider stores url."""
+        p = NotificationProvider(type="webhook", url="https://example.com/hook")
+        assert p.url == "https://example.com/hook"
+
+    def test_optional_fields_default_empty_string(self):
+        """Unset optional properties return empty string, not None."""
+        p = NotificationProvider(type="telegram")
+        assert p.token == ""
+        assert p.chat_id == ""
+        assert p.webhook_url == ""
+
+    def test_provider_can_be_disabled(self):
+        """Provider can be disabled without removing it."""
+        p = NotificationProvider(type="telegram", enabled=False)
+        assert p.enabled is False
+
+    def test_env_var_expansion_in_token(self, monkeypatch):
+        """Token field expands shell environment variables."""
+        monkeypatch.setenv("TEST_BOT_TOKEN", "real-token-value")
+        p = NotificationProvider(type="telegram", token="$TEST_BOT_TOKEN")
+        assert p.token == "real-token-value"
+
+
+# ---------------------------------------------------------------------------
+# Notification model - legacy migration
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationLegacyMigration:
+    def test_new_format_no_migration(self):
+        """New format with providers list is not touched."""
+        n = NotificationConfig(
+            enable=True,
+            providers=[NotificationProvider(type="telegram", token="tok")],
+        )
+        assert len(n.providers) == 1
+        assert n.providers[0].type == "telegram"
+
+    def test_old_format_migrates_to_provider(self):
+        """Old single-provider fields (type, token, chat_id) migrate to providers list."""
+        n = NotificationConfig(
+            enable=True,
+            type="telegram",
+            token="bot_token",
+            chat_id="-100123",
+        )
+        assert len(n.providers) == 1
+        provider = n.providers[0]
+        assert provider.type == "telegram"
+        assert provider.enabled is True
+
+    def test_old_format_no_migration_when_providers_already_set(self):
+        """When providers already exist, legacy fields do not create additional providers."""
+        n = NotificationConfig(
+            enable=True,
+            type="telegram",
+            token="unused",
+            providers=[NotificationProvider(type="discord", webhook_url="https://d.co")],
+        )
+        assert len(n.providers) == 1
+        assert n.providers[0].type == "discord"
+
+    def test_notification_empty_providers_by_default(self):
+        """Default Notification has no providers."""
+        n = NotificationConfig()
+        assert n.providers == []
+        assert n.enable is False
+
+
+# ---------------------------------------------------------------------------
+# Downloader env-var expansion
+# ---------------------------------------------------------------------------
+
+
+class TestDownloaderEnvExpansion:
+    def test_host_expands_env_var(self, monkeypatch):
+        """Downloader.host expands $VAR references."""
+        monkeypatch.setenv("QB_HOST", "192.168.5.10:8080")
+        d = Downloader(host="$QB_HOST")
+        assert d.host == "192.168.5.10:8080"
+
+    def test_username_expands_env_var(self, monkeypatch):
+        """Downloader.username expands $VAR references."""
+        monkeypatch.setenv("QB_USER", "myuser")
+        d = Downloader(username="$QB_USER")
+        assert d.username == "myuser"
+
+    def test_password_expands_env_var(self, monkeypatch):
+        """Downloader.password expands $VAR references."""
+        monkeypatch.setenv("QB_PASS", "s3cret")
+        d = Downloader(password="$QB_PASS")
+        assert d.password == "s3cret"
+
+    def test_literal_host_not_expanded(self):
+        """Literal host strings without $ are returned as-is."""
+        d = Downloader(host="localhost:8080")
+        assert d.host == "localhost:8080"
+
+
+# ---------------------------------------------------------------------------
+# DEFAULT_SETTINGS structure
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultSettings:
+    def test_security_section_present(self):
+        """DEFAULT_SETTINGS contains a security section."""
+        assert "security" in DEFAULT_SETTINGS
+
+    def test_security_default_mcp_whitelist(self):
+        """Default MCP whitelist contains private network ranges."""
+        mcp_wl = DEFAULT_SETTINGS["security"]["mcp_whitelist"]
+        assert "127.0.0.0/8" in mcp_wl
+        assert "192.168.0.0/16" in mcp_wl
+        assert "10.0.0.0/8" in mcp_wl
+
+    def test_security_default_tokens_empty(self):
+        """Default security token lists are empty."""
+        assert DEFAULT_SETTINGS["security"]["login_tokens"] == []
+        assert DEFAULT_SETTINGS["security"]["mcp_tokens"] == []
+
+    def test_notification_uses_providers_format(self):
+        """DEFAULT_SETTINGS notification uses new providers format."""
+        notif = DEFAULT_SETTINGS["notification"]
+        assert "providers" in notif
+        assert notif["providers"] == []
+        assert "type" not in notif
+
+
+# ---------------------------------------------------------------------------
+# BCOLORS utility
+# ---------------------------------------------------------------------------
+
+
+class TestBCOLORS:
+    def test_wrap_single_string(self):
+        """BCOLORS._() wraps a string with color codes and reset."""
+        result = BCOLORS._(BCOLORS.OKGREEN, "hello")
+        assert "hello" in result
+        assert BCOLORS.OKGREEN in result
+        assert BCOLORS.ENDC in result
+
+    def test_wrap_multiple_strings(self):
+        """BCOLORS._() joins multiple args with commas."""
+        result = BCOLORS._(BCOLORS.WARNING, "foo", "bar")
+        assert "foo" in result
+        assert "bar" in result
+
+    def test_wrap_non_string_arg(self):
+        """BCOLORS._() converts non-string args to str."""
+        result = BCOLORS._(BCOLORS.FAIL, 42)
+        assert "42" in result
+
+    def test_all_color_constants_are_strings(self):
+        """All BCOLORS constants are strings."""
+        for attr in ["HEADER", "OKBLUE", "OKCYAN", "OKGREEN", "WARNING", "FAIL", "ENDC"]:
+            assert isinstance(getattr(BCOLORS, attr), str)
+
+
+# ---------------------------------------------------------------------------
+# Migration: security section injection
+# ---------------------------------------------------------------------------
+
+
+class TestMigrateSecuritySection:
+    def test_adds_security_when_missing(self):
+        """_migrate_old_config injects a default security section when absent."""
+        old_config = {
+            "program": {},
+            "rss_parser": {},
+        }
+        result = Settings._migrate_old_config(old_config)
+        assert "security" in result
+        assert "mcp_whitelist" in result["security"]
+
+    def test_preserves_existing_security_section(self):
+        """_migrate_old_config does not overwrite an existing security section."""
+        existing_config = {
+            "program": {},
+            "rss_parser": {},
+            "security": {
+                "login_whitelist": ["10.0.0.0/8"],
+                "login_tokens": ["mytoken"],
+                "mcp_whitelist": [],
+                "mcp_tokens": [],
+            },
+        }
+        result = Settings._migrate_old_config(existing_config)
+        assert result["security"]["login_tokens"] == ["mytoken"]
+        assert result["security"]["login_whitelist"] == ["10.0.0.0/8"]

@@ -220,6 +220,19 @@ export const apiBangumi = {
   },
 
   /**
+   * 手动设置番剧的放送星期
+   * @param bangumiId - bangumi 的 id
+   * @param weekday - 0-6 for Mon-Sun, null to reset
+   */
+  async setWeekday(bangumiId: number, weekday: number | null) {
+    const { data } = await axios.patch<ApiSuccess>(
+      `api/v1/bangumi/${bangumiId}/weekday`,
+      { weekday }
+    );
+    return data;
+  },
+
+  /**
    * 获取所有需要检查偏移量的 bangumi
    */
   async getNeedsReview() {

@@ -210,7 +210,7 @@ class TorrentManager(Database):
         bangumis = self.bangumi.search_all()
         updated = 0
         for bangumi in bangumis:
-            if bangumi.deleted:
+            if bangumi.deleted or bangumi.weekday_locked:
                 continue
             weekday = match_weekday(
                 bangumi.official_title, bangumi.title_raw, calendar_items

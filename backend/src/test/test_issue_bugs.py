@@ -288,3 +288,173 @@ class TestIssue974FilterPatternError:
         p1 = engine._get_filter_pattern("720,1080")
         p2 = engine._get_filter_pattern("720,1080")
         assert p1 is p2
+
+
+# ---------------------------------------------------------------------------
+# Issue #990: Titles starting with numbers cause title_raw=None, crashing
+#             the RSS loop with TypeError in match_torrent
+# https://github.com/EstrellaXD/Auto_Bangumi/issues/990
+#
+# "[ANi] 29 岁单身中坚冒险家的日常 - 07" → regex matches "29 " as episode,
+# title becomes empty → title_raw=None → None stored as alias → crash on
+# `None in torrent_name` in match_torrent.
+# ---------------------------------------------------------------------------
+
+
+class TestIssue990NumberPrefixTitle:
+    """Issue #990: Titles starting with numbers crash RSS loop."""
+
+    PROBLEM_TITLE = "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
+
+    def test_raw_parser_correctly_parses_leading_number_title(self):
+        """raw_parser correctly parses title starting with number and extracts episode."""
+        result = raw_parser(self.PROBLEM_TITLE)
+        assert result is not None
+        assert result.episode == 7
+        assert result.title_zh == "29 岁单身中坚冒险家的日常"
+        assert result.resolution == "1080P"
+        assert result.group == "ANi"
+
+    def test_title_parser_returns_bangumi_for_number_prefix_title(self):
+        """TitleParser.raw_parser returns a valid Bangumi for number-prefixed titles."""
+        from module.parser.title_parser import TitleParser
+
+        result = TitleParser.raw_parser(self.PROBLEM_TITLE)
+        assert result is not None
+        assert result.official_title == "29 岁单身中坚冒险家的日常"
+        assert result.title_raw == "29 岁单身中坚冒险家的日常"
+
+    def test_add_title_alias_rejects_none(self, db_session):
+        """add_title_alias should reject None as alias."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        bangumi = Bangumi(
+            official_title="29岁单身冒险家的日常",
+            title_raw="[ANi] 29岁单身冒险家的日常",
+            season=1,
+        )
+        db_session.add(bangumi)
+        db_session.commit()
+
+        result = db.add_title_alias(bangumi.id, None)
+        assert result is False
+        # Verify no alias was stored
+        assert bangumi.title_aliases is None
+
+    def test_add_title_alias_rejects_empty_string(self, db_session):
+        """add_title_alias should reject empty string as alias."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        bangumi = Bangumi(
+            official_title="Test Anime",
+            title_raw="[Group] Test Anime",
+            season=1,
+        )
+        db_session.add(bangumi)
+        db_session.commit()
+
+        result = db.add_title_alias(bangumi.id, "")
+        assert result is False
+
+    def test_get_aliases_list_filters_null_values(self):
+        """_get_aliases_list should filter out null values from JSON."""
+        from module.database.bangumi import _get_aliases_list
+        from module.models import Bangumi
+
+        bangumi = Bangumi(title_raw="test", official_title="Test")
+        # Simulates the corrupted state: [null] stored in DB
+        bangumi.title_aliases = "[null]"
+        assert _get_aliases_list(bangumi) == []
+
+        # Mixed valid and null values
+        bangumi.title_aliases = '[null, "valid_alias", null, "another"]'
+        assert _get_aliases_list(bangumi) == ["valid_alias", "another"]
+
+    def test_get_all_title_patterns_skips_none_title_raw(self, db_session):
+        """get_all_title_patterns should return empty list when title_raw is None."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        bangumi = Bangumi(official_title="Test Anime")
+        bangumi.title_raw = None
+        bangumi.title_aliases = None
+
+        patterns = db.get_all_title_patterns(bangumi)
+        assert patterns == []
+
+    def test_match_torrent_no_crash_on_none_title_raw(self, db_session):
+        """match_torrent should not crash when a bangumi has None title_raw."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        # Insert a bangumi with corrupted title_raw (simulating the bug state)
+        bangumi = Bangumi(
+            official_title="29岁单身冒险家的日常",
+            season=1,
+        )
+        bangumi.title_raw = None
+        db_session.add(bangumi)
+        db_session.commit()
+
+        # Should not raise TypeError: 'in <string>' requires string
+        result = db.match_torrent(
+            "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P][Baha][WEB-DL]"
+        )
+        assert result is None
+
+    def test_match_torrent_no_crash_on_null_aliases(self, db_session):
+        """match_torrent should not crash when title_aliases contains null."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        bangumi = Bangumi(
+            official_title="29岁单身冒险家的日常",
+            title_raw="[ANi] 29岁单身冒险家的日常",
+            season=1,
+        )
+        bangumi.title_aliases = "[null]"
+        db_session.add(bangumi)
+        db_session.commit()
+
+        # Should not crash — null aliases are filtered out
+        result = db.match_torrent(
+            "[ANi] 29岁单身冒险家的日常 - 07 [1080P][Baha][WEB-DL]"
+        )
+        assert result is not None
+        assert result.official_title == "29岁单身冒险家的日常"
+
+    def test_match_list_no_crash_on_corrupted_data(self, db_session):
+        """match_list should handle bangumi with None title_raw and null aliases."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+        from unittest.mock import MagicMock
+
+        db = BangumiDatabase(db_session)
+
+        # Insert corrupted bangumi (title_raw=None, aliases=[null])
+        bangumi = Bangumi(official_title="29岁单身冒险家的日常", season=1)
+        bangumi.title_raw = None
+        bangumi.title_aliases = "[null]"
+        db_session.add(bangumi)
+
+        # Insert a valid bangumi
+        valid = Bangumi(
+            official_title="葬送的芙莉莲",
+            title_raw="葬送的芙莉莲 / Sousou no Frieren",
+            season=1,
+        )
+        db_session.add(valid)
+        db_session.commit()
+
+        torrent = MagicMock()
+        torrent.name = "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P]"
+
+        # Should not crash even with corrupted data in the DB
+        unmatched = db.match_list([torrent], "https://mikanani.me/RSS/test")

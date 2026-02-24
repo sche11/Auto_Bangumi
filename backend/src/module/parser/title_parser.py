@@ -74,7 +74,7 @@ class TitleParser:
                 "en": episode.title_en,
                 "jp": episode.title_jp,
             }
-            title_raw = episode.title_en if episode.title_en else episode.title_zh
+            title_raw = episode.title_en or episode.title_zh or episode.title_jp
             if titles[language]:
                 official_title = titles[language]
             elif titles["zh"]:
@@ -85,6 +85,9 @@ class TitleParser:
                 official_title = titles["jp"]
             else:
                 official_title = title_raw
+            if not title_raw:
+                logger.warning("Cannot extract title_raw from '%s', skipping", raw)
+                return None
             _season = episode.season
             logger.debug("RAW:%s >> %s", raw, title_raw)
             return Bangumi(

@@ -82,6 +82,15 @@ export const useBangumiStore = defineStore('bangumi', () => {
     }
   }
 
+  async function setWeekday(bangumiId: number, weekday: number | null) {
+    await apiBangumi.setWeekday(bangumiId, weekday);
+    const item = bangumi.value.find((b) => b.id === bangumiId);
+    if (item) {
+      item.air_weekday = weekday;
+      item.weekday_locked = weekday !== null;
+    }
+  }
+
   return {
     bangumi,
     showArchived,
@@ -102,5 +111,6 @@ export const useBangumiStore = defineStore('bangumi', () => {
     refreshMetadata,
     openEditPopup,
     ruleManage,
+    setWeekday,
   };
 });

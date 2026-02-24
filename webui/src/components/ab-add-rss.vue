@@ -147,16 +147,23 @@ function goBack() {
   step.value = 'input';
 }
 
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
+
 async function copyRssLink() {
   const rssLink = rule.value.rss_link?.[0] || rss.value.url || '';
   if (rssLink) {
     await navigator.clipboard.writeText(rssLink);
     copied.value = true;
-    setTimeout(() => {
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
       copied.value = false;
     }, 2000);
   }
 }
+
+onBeforeUnmount(() => {
+  clearTimeout(copyTimer);
+});
 
 async function autoDetectOffset() {
   if (!rule.value.id) return;

@@ -29,10 +29,10 @@ class MockDownloader:
             "rss_processing_enabled": True,
             "rss_refresh_interval": 30,
         }
-        logger.info("[MockDownloader] Initialized")
+        logger.debug("[MockDownloader] Initialized")
 
     async def auth(self, retry=3) -> bool:
-        logger.info("[MockDownloader] Auth successful (mocked)")
+        logger.debug("[MockDownloader] Auth successful (mocked)")
         return True
 
     async def logout(self):

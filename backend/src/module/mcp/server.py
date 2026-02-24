@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.routing import Mount, Route
 
 from .resources import RESOURCE_TEMPLATES, RESOURCES, handle_resource
-from .security import LocalNetworkMiddleware
+from .security import McpAccessMiddleware
 from .tools import TOOLS, handle_tool
 
 logger = logging.getLogger(__name__)
@@ -73,8 +73,8 @@ def create_mcp_starlette_app() -> Starlette:
     - ``GET /sse`` - SSE stream for MCP clients
     - ``POST /messages/`` - client-to-server message posting
 
-    ``LocalNetworkMiddleware`` is applied so the endpoint is only reachable
-    from loopback and RFC 1918 addresses.
+    ``McpAccessMiddleware`` is applied to enforce configurable IP whitelist
+    and bearer token access control.
     """
     app = Starlette(
         routes=[
@@ -82,5 +82,5 @@ def create_mcp_starlette_app() -> Starlette:
             Mount("/messages", app=sse.handle_post_message),
         ],
     )
-    app.add_middleware(LocalNetworkMiddleware)
+    app.add_middleware(McpAccessMiddleware)
     return app

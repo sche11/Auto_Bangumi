@@ -293,7 +293,68 @@ class TestClientDelegation:
         result = await download_client.rename_torrent_file("hash1", "old.mkv", "new.mkv")
         assert result is False
 
+    async def test_rename_torrent_file_passes_verify_flag(
+        self, download_client, mock_qb_client
+    ):
+        """rename_torrent_file forwards the verify kwarg to the underlying client."""
+        mock_qb_client.torrents_rename_file.return_value = True
+        await download_client.rename_torrent_file(
+            "hash1", "old.mkv", "new.mkv", verify=False
+        )
+        call_kwargs = mock_qb_client.torrents_rename_file.call_args[1]
+        assert call_kwargs["verify"] is False
+
     async def test_delete_torrent(self, download_client, mock_qb_client):
         """delete_torrent delegates to client.torrents_delete."""
         await download_client.delete_torrent("hash1", delete_files=True)
         mock_qb_client.torrents_delete.assert_called_once_with("hash1", delete_files=True)
+
+
+# ---------------------------------------------------------------------------
+# add_tag
+# ---------------------------------------------------------------------------
+
+
+class TestAddTag:
+    async def test_add_tag_delegates_to_client(self, download_client, mock_qb_client):
+        """add_tag delegates to client.add_tag."""
+        mock_qb_client.add_tag = AsyncMock(return_value=None)
+        download_client.client = mock_qb_client
+        await download_client.add_tag("deadbeef12345678", "ab:42")
+        mock_qb_client.add_tag.assert_called_once_with("deadbeef12345678", "ab:42")
+
+    async def test_add_tag_short_hash_no_error(self, download_client, mock_qb_client):
+        """add_tag with a hash shorter than 8 chars does not crash the slice."""
+        mock_qb_client.add_tag = AsyncMock(return_value=None)
+        download_client.client = mock_qb_client
+        # Should not raise even for short hashes
+        await download_client.add_tag("abc", "ab:1")
+
+
+# ---------------------------------------------------------------------------
+# Context manager: ConnectionError on failed auth
+# ---------------------------------------------------------------------------
+
+
+class TestContextManagerAuth:
+    async def test_aenter_raises_on_auth_failure(self, download_client, mock_qb_client):
+        """__aenter__ raises ConnectionError when auth fails."""
+        mock_qb_client.auth.return_value = False
+        download_client.authed = False
+        with pytest.raises(ConnectionError, match="authentication failed"):
+            await download_client.__aenter__()
+
+    async def test_aenter_succeeds_when_auth_passes(self, download_client, mock_qb_client):
+        """__aenter__ returns self when auth succeeds."""
+        mock_qb_client.auth.return_value = True
+        download_client.authed = False
+        result = await download_client.__aenter__()
+        assert result is download_client
+        assert download_client.authed is True
+
+    async def test_aexit_calls_logout_when_authed(self, download_client, mock_qb_client):
+        """__aexit__ calls logout and resets authed when session was active."""
+        download_client.authed = True
+        await download_client.__aexit__(None, None, None)
+        mock_qb_client.logout.assert_called_once()
+        assert download_client.authed is False

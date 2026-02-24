@@ -4,13 +4,27 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+def _expand(value: str | None) -> str:
+    """Expand shell environment variables in *value*, returning empty string for None."""
+    return expandvars(value) if value else ""
+
+
 class Program(BaseModel):
+    """Scheduler timing and WebUI port settings."""
+
     rss_time: int = Field(900, description="Sleep time")
     rename_time: int = Field(60, description="Rename times in one loop")
     webui_port: int = Field(7892, description="WebUI port")
 
 
 class Downloader(BaseModel):
+    """Download client connection settings.
+
+    Credential fields (``host``, ``username``, ``password``) are stored with a
+    trailing underscore and exposed via properties that expand ``$VAR``
+    environment variable references at access time.
+    """
+
     type: str = Field("qbittorrent", description="Downloader type")
     host_: str = Field("172.17.0.1:8080", alias="host", description="Downloader host")
     username_: str = Field("admin", alias="username", description="Downloader username")
@@ -22,24 +36,28 @@ class Downloader(BaseModel):
 
     @property
     def host(self):
-        return expandvars(self.host_)
+        return _expand(self.host_)
 
     @property
     def username(self):
-        return expandvars(self.username_)
+        return _expand(self.username_)
 
     @property
     def password(self):
-        return expandvars(self.password_)
+        return _expand(self.password_)
 
 
 class RSSParser(BaseModel):
+    """RSS feed parsing settings."""
+
     enable: bool = Field(True, description="Enable RSS parser")
     filter: list[str] = Field(["720", r"\d+-\d"], description="Filter")
     language: str = "zh"
 
 
 class BangumiManage(BaseModel):
+    """File organisation and renaming settings."""
+
     enable: bool = Field(True, description="Enable bangumi manage")
     eps_complete: bool = Field(False, description="Enable eps complete")
     rename_method: str = Field("pn", description="Rename method")
@@ -48,10 +66,14 @@ class BangumiManage(BaseModel):
 
 
 class Log(BaseModel):
+    """Logging verbosity settings."""
+
     debug_enable: bool = Field(False, description="Enable debug")
 
 
 class Proxy(BaseModel):
+    """HTTP/SOCKS proxy settings. Credentials support ``$VAR`` expansion."""
+
     enable: bool = Field(False, description="Enable proxy")
     type: str = Field("http", description="Proxy type")
     host: str = Field("", description="Proxy host")
@@ -61,11 +83,11 @@ class Proxy(BaseModel):
 
     @property
     def username(self):
-        return expandvars(self.username_)
+        return _expand(self.username_)
 
     @property
     def password(self):
-        return expandvars(self.password_)
+        return _expand(self.password_)
 
 
 class NotificationProvider(BaseModel):
@@ -103,35 +125,35 @@ class NotificationProvider(BaseModel):
 
     @property
     def token(self) -> str:
-        return expandvars(self.token_) if self.token_ else ""
+        return _expand(self.token_)
 
     @property
     def chat_id(self) -> str:
-        return expandvars(self.chat_id_) if self.chat_id_ else ""
+        return _expand(self.chat_id_)
 
     @property
     def webhook_url(self) -> str:
-        return expandvars(self.webhook_url_) if self.webhook_url_ else ""
+        return _expand(self.webhook_url_)
 
     @property
     def server_url(self) -> str:
-        return expandvars(self.server_url_) if self.server_url_ else ""
+        return _expand(self.server_url_)
 
     @property
     def device_key(self) -> str:
-        return expandvars(self.device_key_) if self.device_key_ else ""
+        return _expand(self.device_key_)
 
     @property
     def user_key(self) -> str:
-        return expandvars(self.user_key_) if self.user_key_ else ""
+        return _expand(self.user_key_)
 
     @property
     def api_token(self) -> str:
-        return expandvars(self.api_token_) if self.api_token_ else ""
+        return _expand(self.api_token_)
 
     @property
     def url(self) -> str:
-        return expandvars(self.url_) if self.url_ else ""
+        return _expand(self.url_)
 
 
 class Notification(BaseModel):
@@ -149,11 +171,11 @@ class Notification(BaseModel):
 
     @property
     def token(self) -> str:
-        return expandvars(self.token_) if self.token_ else ""
+        return _expand(self.token_)
 
     @property
     def chat_id(self) -> str:
-        return expandvars(self.chat_id_) if self.chat_id_ else ""
+        return _expand(self.chat_id_)
 
     @model_validator(mode="after")
     def migrate_legacy_config(self) -> "Notification":
@@ -197,7 +219,35 @@ class ExperimentalOpenAI(BaseModel):
         return value
 
 
+class Security(BaseModel):
+    """Access control configuration for the login endpoint and MCP server.
+
+    Both ``login_whitelist`` and ``mcp_whitelist`` accept IPv4/IPv6 CIDR ranges.
+    An empty ``login_whitelist`` allows all IPs; an empty ``mcp_whitelist``
+    denies all IP-based access (tokens still work).
+    """
+
+    login_whitelist: list[str] = Field(
+        default_factory=list,
+        description="IP/CIDR whitelist for login access. Empty = allow all.",
+    )
+    login_tokens: list[str] = Field(
+        default_factory=list,
+        description="API bearer tokens that bypass login authentication.",
+    )
+    mcp_whitelist: list[str] = Field(
+        default_factory=list,
+        description="IP/CIDR whitelist for MCP access. Empty = deny all.",
+    )
+    mcp_tokens: list[str] = Field(
+        default_factory=list,
+        description="API bearer tokens for MCP access.",
+    )
+
+
 class Config(BaseModel):
+    """Root configuration model composed of all subsection models."""
+
     program: Program = Program()
     downloader: Downloader = Downloader()
     rss_parser: RSSParser = RSSParser()
@@ -206,6 +256,7 @@ class Config(BaseModel):
     proxy: Proxy = Proxy()
     notification: Notification = Notification()
     experimental_openai: ExperimentalOpenAI = ExperimentalOpenAI()
+    security: Security = Security()
 
     def model_dump(self, *args, by_alias=True, **kwargs):
         return super().model_dump(*args, by_alias=by_alias, **kwargs)

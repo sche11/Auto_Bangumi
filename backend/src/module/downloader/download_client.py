@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class DownloadClient(TorrentPath):
+    """Unified async download client.
+
+    Wraps qBittorrent, Aria2, or MockDownloader behind a common interface.
+    Intended to be used as an async context manager; authentication is
+    performed on ``__aenter__`` and the session is closed on ``__aexit__``.
+    """
+
     def __init__(self):
         super().__init__()
         self.client = self.__getClient()
@@ -18,27 +25,28 @@ class DownloadClient(TorrentPath):
 
     @staticmethod
     def __getClient():
-        type = settings.downloader.type
+        """Instantiate the configured downloader client (qbittorrent | aria2 | mock)."""
+        downloader_type = settings.downloader.type
         host = settings.downloader.host
         username = settings.downloader.username
         password = settings.downloader.password
         ssl = settings.downloader.ssl
-        if type == "qbittorrent":
+        if downloader_type == "qbittorrent":
             from .client.qb_downloader import QbDownloader
 
             return QbDownloader(host, username, password, ssl)
-        elif type == "aria2":
+        elif downloader_type == "aria2":
             from .client.aria2_downloader import Aria2Downloader
 
             return Aria2Downloader(host, username, password)
-        elif type == "mock":
+        elif downloader_type == "mock":
             from .client.mock_downloader import MockDownloader
 
-            logger.info("[Downloader] Using MockDownloader for local development")
+            logger.debug("[Downloader] Using MockDownloader for local development")
             return MockDownloader()
         else:
-            logger.error(f"[Downloader] Unsupported downloader type: {type}")
-            raise Exception(f"Unsupported downloader type: {type}")
+            logger.error("[Downloader] Unsupported downloader type: %s", downloader_type)
+            raise Exception(f"Unsupported downloader type: {downloader_type}")
 
     async def __aenter__(self):
         if not self.authed:
@@ -65,6 +73,7 @@ class DownloadClient(TorrentPath):
         return await self.client.check_host()
 
     async def init_downloader(self):
+        """Apply required qBittorrent RSS preferences and create the Bangumi category."""
         prefs = {
             "rss_auto_downloading_enabled": True,
             "rss_max_articles_per_feed": 500,
@@ -84,6 +93,7 @@ class DownloadClient(TorrentPath):
             settings.downloader.path = self._join_path(prefs["save_path"], "Bangumi")
 
     async def set_rule(self, data: Bangumi):
+        """Create or update a qBittorrent RSS auto-download rule for one bangumi entry."""
         data.rule_name = self._rule_name(data)
         data.save_path = self._gen_save_path(data)
         rule = {
@@ -145,6 +155,12 @@ class DownloadClient(TorrentPath):
         await self.client.torrents_resume(hashes)
 
     async def add_torrent(self, torrent: Torrent | list, bangumi: Bangumi) -> bool:
+        """Download a torrent (or list of torrents) for the given bangumi entry.
+
+        Handles both magnet links and .torrent file URLs, fetching file bytes
+        when necessary. Tags each torrent with ``ab:<bangumi_id>`` for later
+        episode-offset lookup during rename.
+        """
         if not bangumi.save_path:
             bangumi.save_path = self._gen_save_path(bangumi)
         async with RequestContent() as req:

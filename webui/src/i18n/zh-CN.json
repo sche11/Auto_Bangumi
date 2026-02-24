@@ -79,6 +79,14 @@
       "type": "类型",
       "username": "用户名"
     },
+    "security_set": {
+      "title": "安全设置",
+      "hint": "登录白名单：为空则允许所有 IP。MCP 白名单：为空则拒绝所有访问。",
+      "login_whitelist": "登录 IP 白名单",
+      "login_tokens": "登录 API 令牌",
+      "mcp_whitelist": "MCP IP 白名单",
+      "mcp_tokens": "MCP API 令牌"
+    },
     "search_provider_set": {
       "title": "搜索源设置",
       "add_new": "添加搜索源",
@@ -287,7 +295,11 @@
     "empty_state": {
       "title": "暂无放送表",
       "subtitle": "点击刷新按钮获取本季度放送数据"
-    }
+    },
+    "drag_hint": "拖拽以设置放送日",
+    "pinned": "手动设置",
+    "unpin": "重置为未知",
+    "drop_here": "拖放到此处"
   },
   "setup": {
     "welcome": {

@@ -36,6 +36,9 @@ class Bangumi(SQLModel, table=True):
     air_weekday: Optional[int] = Field(
         default=None, alias="air_weekday", title="放送星期"
     )
+    weekday_locked: bool = Field(
+        default=False, alias="weekday_locked", title="放送星期锁定"
+    )
     needs_review: bool = Field(default=False, alias="needs_review", title="需要检查")
     needs_review_reason: Optional[str] = Field(
         default=None, alias="needs_review_reason", title="检查原因"
@@ -76,6 +79,9 @@ class BangumiUpdate(SQLModel):
     archived: bool = Field(default=False, alias="archived", title="是否已归档")
     air_weekday: Optional[int] = Field(
         default=None, alias="air_weekday", title="放送星期"
+    )
+    weekday_locked: bool = Field(
+        default=False, alias="weekday_locked", title="放送星期锁定"
     )
     needs_review: bool = Field(default=False, alias="needs_review", title="需要检查")
     needs_review_reason: Optional[str] = Field(

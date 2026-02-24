@@ -1,4 +1,4 @@
-"""Tests for Config API endpoints."""
+"""Tests for Config API endpoints and config sanitization."""
 
 import pytest
 from unittest.mock import patch, MagicMock
@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from module.api import v1
+from module.api.config import _sanitize_dict
 from module.models.config import Config
 from module.security.api import get_current_user
 
@@ -263,3 +264,99 @@ class TestUpdateConfig:
         response = authed_client.patch("/api/v1/config/update", json=invalid_data)
 
         assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_dict unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeDict:
+    def test_masks_password_key(self):
+        """Keys containing 'password' are masked."""
+        result = _sanitize_dict({"password": "secret"})
+        assert result["password"] == "********"
+
+    def test_masks_api_key(self):
+        """Keys containing 'api_key' are masked."""
+        result = _sanitize_dict({"api_key": "sk-abc123"})
+        assert result["api_key"] == "********"
+
+    def test_masks_token_key(self):
+        """Keys containing 'token' are masked."""
+        result = _sanitize_dict({"token": "bearer-xyz"})
+        assert result["token"] == "********"
+
+    def test_masks_secret_key(self):
+        """Keys containing 'secret' are masked."""
+        result = _sanitize_dict({"my_secret": "topsecret"})
+        assert result["my_secret"] == "********"
+
+    def test_case_insensitive_key_matching(self):
+        """Sensitive key matching is case-insensitive."""
+        result = _sanitize_dict({"API_KEY": "abc"})
+        assert result["API_KEY"] == "********"
+
+    def test_non_sensitive_keys_pass_through(self):
+        """Non-sensitive keys are returned unchanged."""
+        result = _sanitize_dict({"host": "localhost", "port": 8080, "enable": True})
+        assert result["host"] == "localhost"
+        assert result["port"] == 8080
+        assert result["enable"] is True
+
+    def test_nested_dict_recursed(self):
+        """Nested dicts are processed recursively."""
+        result = _sanitize_dict({
+            "downloader": {
+                "host": "localhost",
+                "password": "secret",
+            }
+        })
+        assert result["downloader"]["host"] == "localhost"
+        assert result["downloader"]["password"] == "********"
+
+    def test_deeply_nested_dict(self):
+        """Deeply nested sensitive keys are masked."""
+        result = _sanitize_dict({
+            "level1": {
+                "level2": {
+                    "api_key": "deep-secret"
+                }
+            }
+        })
+        assert result["level1"]["level2"]["api_key"] == "********"
+
+    def test_non_string_value_not_masked(self):
+        """Non-string values with sensitive-looking keys are NOT masked."""
+        result = _sanitize_dict({"password": 12345})
+        # Only string values are masked; integers pass through
+        assert result["password"] == 12345
+
+    def test_empty_dict(self):
+        """Empty dict returns empty dict."""
+        assert _sanitize_dict({}) == {}
+
+    def test_mixed_sensitive_and_plain(self):
+        """Mix of sensitive and plain keys handled correctly."""
+        result = _sanitize_dict({
+            "username": "admin",
+            "password": "secret",
+            "host": "10.0.0.1",
+            "token": "jwt-abc",
+        })
+        assert result["username"] == "admin"
+        assert result["host"] == "10.0.0.1"
+        assert result["password"] == "********"
+        assert result["token"] == "********"
+
+    def test_get_config_masks_sensitive_fields(self, authed_client):
+        """GET /config/get response masks password and api_key fields."""
+        test_config = Config()
+        with patch("module.api.config.settings", test_config):
+            response = authed_client.get("/api/v1/config/get")
+        assert response.status_code == 200
+        data = response.json()
+        # Downloader password should be masked
+        assert data["downloader"]["password"] == "********"
+        # OpenAI api_key should be masked (it's an empty string but still masked)
+        assert data["experimental_openai"]["api_key"] == "********"

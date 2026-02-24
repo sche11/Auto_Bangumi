@@ -79,6 +79,14 @@
       "type": "Proxy Type",
       "username": "Username"
     },
+    "security_set": {
+      "title": "Security",
+      "hint": "Login whitelist: empty = allow all IPs. MCP whitelist: empty = deny all access.",
+      "login_whitelist": "Login IP Whitelist",
+      "login_tokens": "Login API Tokens",
+      "mcp_whitelist": "MCP IP Whitelist",
+      "mcp_tokens": "MCP API Tokens"
+    },
     "search_provider_set": {
       "title": "Search Provider",
       "add_new": "Add Provider",
@@ -287,7 +295,11 @@
     "empty_state": {
       "title": "No Schedule Yet",
       "subtitle": "Click refresh to fetch this season's broadcast data"
-    }
+    },
+    "drag_hint": "Drag to assign weekday",
+    "pinned": "Manually assigned",
+    "unpin": "Reset to unknown",
+    "drop_here": "Drop here"
   },
   "setup": {
     "welcome": {

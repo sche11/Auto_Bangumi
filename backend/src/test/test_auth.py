@@ -151,6 +151,15 @@ class TestPasswordHashing:
 
 
 class TestGetCurrentUser:
+    @staticmethod
+    def _mock_request(authorization=""):
+        """Create a mock Request with the given Authorization header."""
+        from unittest.mock import MagicMock
+
+        request = MagicMock()
+        request.headers = {"authorization": authorization}
+        return request
+
     @patch("module.security.api.DEV_AUTH_BYPASS", False)
     async def test_no_cookie_raises_401(self):
         """get_current_user raises 401 when no token cookie."""
@@ -159,7 +168,7 @@ class TestGetCurrentUser:
         from module.security.api import get_current_user
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(token=None)
+            await get_current_user(request=self._mock_request(), token=None)
         assert exc_info.value.status_code == 401
 
     @patch("module.security.api.DEV_AUTH_BYPASS", False)
@@ -170,7 +179,7 @@ class TestGetCurrentUser:
         from module.security.api import get_current_user
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(token="invalid.jwt.token")
+            await get_current_user(request=self._mock_request(), token="invalid.jwt.token")
         assert exc_info.value.status_code == 401
 
     @patch("module.security.api.DEV_AUTH_BYPASS", False)
@@ -186,7 +195,7 @@ class TestGetCurrentUser:
         active_user.clear()
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(token=token)
+            await get_current_user(request=self._mock_request(), token=token)
         assert exc_info.value.status_code == 401
 
     @patch("module.security.api.DEV_AUTH_BYPASS", False)
@@ -202,8 +211,113 @@ class TestGetCurrentUser:
         active_user.clear()
         active_user["active_user"] = datetime.now()
 
-        result = await get_current_user(token=token)
+        result = await get_current_user(request=self._mock_request(), token=token)
         assert result == "active_user"
 
         # Cleanup
         active_user.clear()
+
+    @patch("module.security.api.DEV_AUTH_BYPASS", True)
+    async def test_dev_bypass_skips_auth(self):
+        """When DEV_AUTH_BYPASS is True, get_current_user returns 'dev_user' unconditionally."""
+        from module.security.api import get_current_user
+
+        result = await get_current_user(request=self._mock_request(), token=None)
+        assert result == "dev_user"
+
+    @patch("module.security.api.DEV_AUTH_BYPASS", False)
+    async def test_bearer_token_bypass_valid(self):
+        """A valid login_token in Authorization header returns 'api_token_user'."""
+        from module.security.api import get_current_user
+
+        mock_request = self._mock_request(authorization="Bearer valid-api-token")
+        mock_security = type("S", (), {"login_tokens": ["valid-api-token"]})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            result = await get_current_user(request=mock_request, token=None)
+        assert result == "api_token_user"
+
+    @patch("module.security.api.DEV_AUTH_BYPASS", False)
+    async def test_bearer_token_bypass_invalid(self):
+        """An invalid login_token still falls through to cookie check."""
+        from fastapi import HTTPException
+
+        from module.security.api import get_current_user
+
+        mock_request = self._mock_request(authorization="Bearer wrong-token")
+        mock_security = type("S", (), {"login_tokens": ["correct-token"]})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            with pytest.raises(HTTPException) as exc_info:
+                await get_current_user(request=mock_request, token=None)
+        assert exc_info.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# check_login_ip
+# ---------------------------------------------------------------------------
+
+
+class TestCheckLoginIp:
+    @staticmethod
+    def _make_request(host: str | None):
+        from unittest.mock import MagicMock
+
+        request = MagicMock()
+        if host is None:
+            request.client = None
+        else:
+            request.client = MagicMock()
+            request.client.host = host
+        return request
+
+    def test_empty_whitelist_allows_all(self):
+        """When login_whitelist is empty, all IPs pass."""
+        from module.security.api import check_login_ip
+
+        mock_security = type("S", (), {"login_whitelist": []})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            # Should not raise
+            check_login_ip(request=self._make_request("8.8.8.8"))
+
+    def test_allowed_ip_passes(self):
+        """IP in whitelist does not raise."""
+        from module.security.api import check_login_ip
+
+        mock_security = type("S", (), {"login_whitelist": ["192.168.0.0/16"]})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            check_login_ip(request=self._make_request("192.168.1.100"))
+
+    def test_blocked_ip_raises_403(self):
+        """IP outside whitelist raises 403."""
+        from fastapi import HTTPException
+
+        from module.security.api import check_login_ip
+
+        mock_security = type("S", (), {"login_whitelist": ["192.168.0.0/16"]})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            with pytest.raises(HTTPException) as exc_info:
+                check_login_ip(request=self._make_request("8.8.8.8"))
+        assert exc_info.value.status_code == 403
+
+    def test_no_client_raises_403_when_whitelist_set(self):
+        """Missing client info raises 403 when whitelist is non-empty."""
+        from fastapi import HTTPException
+
+        from module.security.api import check_login_ip
+
+        mock_security = type("S", (), {"login_whitelist": ["192.168.0.0/16"]})()
+        mock_settings = type("Settings", (), {"security": mock_security})()
+
+        with patch("module.security.api.settings", mock_settings):
+            with pytest.raises(HTTPException) as exc_info:
+                check_login_ip(request=self._make_request(None))
+        assert exc_info.value.status_code == 403

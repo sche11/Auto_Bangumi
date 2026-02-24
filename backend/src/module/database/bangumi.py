@@ -47,7 +47,9 @@ def _get_aliases_list(bangumi: Bangumi) -> list[str]:
         return []
     try:
         aliases = json.loads(bangumi.title_aliases)
-        return aliases if isinstance(aliases, list) else []
+        if not isinstance(aliases, list):
+            return []
+        return [a for a in aliases if a]
     except (json.JSONDecodeError, TypeError):
         return []
 
@@ -141,6 +143,10 @@ class BangumiDatabase:
             )
             return False
 
+        # Don't add None or empty aliases
+        if not new_title_raw:
+            return False
+
         # Don't add if it's the same as the main title_raw
         if bangumi.title_raw == new_title_raw:
             return False
@@ -165,7 +171,9 @@ class BangumiDatabase:
 
     def get_all_title_patterns(self, bangumi: Bangumi) -> list[str]:
         """Get all title patterns for matching (title_raw + all aliases)."""
-        patterns = [bangumi.title_raw]
+        patterns = []
+        if bangumi.title_raw:
+            patterns.append(bangumi.title_raw)
         patterns.extend(_get_aliases_list(bangumi))
         return patterns
 
@@ -656,4 +664,26 @@ class BangumiDatabase:
         self.session.commit()
         _invalidate_bangumi_cache()
         logger.debug("[Database] Cleared needs_review for bangumi id %s", _id)
+        return True
+
+    def set_weekday(self, _id: int, weekday: int | None) -> bool:
+        """Set air_weekday and weekday_locked for manual calendar assignment."""
+        bangumi = self.session.get(Bangumi, _id)
+        if not bangumi:
+            return False
+        if weekday is not None:
+            bangumi.air_weekday = weekday
+            bangumi.weekday_locked = True
+        else:
+            bangumi.air_weekday = None
+            bangumi.weekday_locked = False
+        self.session.add(bangumi)
+        self.session.commit()
+        _invalidate_bangumi_cache()
+        logger.debug(
+            "[Database] Set weekday=%s, locked=%s for bangumi id %s",
+            weekday,
+            bangumi.weekday_locked,
+            _id,
+        )
         return True

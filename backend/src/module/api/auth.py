@@ -9,6 +9,7 @@ from module.models.user import User, UserUpdate
 from module.security.api import (
     active_user,
     auth_user,
+    check_login_ip,
     get_current_user,
     update_user_info,
 )
@@ -18,17 +19,26 @@ from .response import u_response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_TOKEN_EXPIRY_DAYS = 1
+_TOKEN_MAX_AGE = 86400
 
-@router.post("/login", response_model=dict)
+
+def _issue_token(username: str, response: Response) -> dict:
+    """Create a JWT, set it as an HttpOnly cookie, and return the bearer payload."""
+    token = create_access_token(
+        data={"sub": username}, expires_delta=timedelta(days=_TOKEN_EXPIRY_DAYS)
+    )
+    response.set_cookie(key="token", value=token, httponly=True, max_age=_TOKEN_MAX_AGE)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post("/login", response_model=dict, dependencies=[Depends(check_login_ip)])
 async def login(response: Response, form_data=Depends(OAuth2PasswordRequestForm)):
+    """Authenticate with username/password and issue a session token."""
     user = User(username=form_data.username, password=form_data.password)
     resp = auth_user(user)
     if resp.status:
-        token = create_access_token(
-            data={"sub": user.username}, expires_delta=timedelta(days=1)
-        )
-        response.set_cookie(key="token", value=token, httponly=True, max_age=86400)
-        return {"access_token": token, "token_type": "bearer"}
+        return _issue_token(user.username, response)
     return u_response(resp)
 
 
@@ -36,6 +46,7 @@ async def login(response: Response, form_data=Depends(OAuth2PasswordRequestForm)
     "/refresh_token", response_model=dict, dependencies=[Depends(get_current_user)]
 )
 async def refresh(response: Response, token: str = Cookie(None)):
+    """Refresh the current session token and update the active-user timestamp."""
     payload = decode_token(token)
     username = payload.get("sub") if payload else None
     if not username:
@@ -43,17 +54,14 @@ async def refresh(response: Response, token: str = Cookie(None)):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
     active_user[username] = datetime.now()
-    new_token = create_access_token(
-        data={"sub": username}, expires_delta=timedelta(days=1)
-    )
-    response.set_cookie(key="token", value=new_token, httponly=True, max_age=86400)
-    return {"access_token": new_token, "token_type": "bearer"}
+    return _issue_token(username, response)
 
 
 @router.get(
     "/logout", response_model=APIResponse, dependencies=[Depends(get_current_user)]
 )
 async def logout(response: Response, token: str = Cookie(None)):
+    """Invalidate the session and clear the token cookie."""
     payload = decode_token(token)
     username = payload.get("sub") if payload else None
     if username:
@@ -69,6 +77,7 @@ async def logout(response: Response, token: str = Cookie(None)):
 async def update_user(
     user_data: UserUpdate, response: Response, token: str = Cookie(None)
 ):
+    """Update credentials for the current user and re-issue a fresh token."""
     payload = decode_token(token)
     old_user = payload.get("sub") if payload else None
     if not old_user:
@@ -76,17 +85,4 @@ async def update_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
     if update_user_info(user_data, old_user):
-        token = create_access_token(
-            data={"sub": old_user}, expires_delta=timedelta(days=1)
-        )
-        response.set_cookie(
-            key="token",
-            value=token,
-            httponly=True,
-            max_age=86400,
-        )
-        return {
-            "access_token": token,
-            "token_type": "bearer",
-            "message": "update success",
-        }
+        return {**_issue_token(old_user, response), "message": "update success"}

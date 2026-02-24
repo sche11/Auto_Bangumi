@@ -38,6 +38,9 @@ importers:
       vue-router:
         specifier: ^4.4.5
         version: 4.4.5(vue@3.5.8(typescript@4.9.5))
+      vuedraggable:
+        specifier: ^4.1.0
+        version: 4.1.0(vue@3.5.8(typescript@4.9.5))
     devDependencies:
       '@antfu/eslint-config':
         specifier: ^0.38.6
@@ -5170,6 +5173,9 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
+  sortablejs@1.14.0:
+    resolution: {integrity: sha512-pBXvQCs5/33fdN1/39pPL0NZF20LeRbLQ5jtnheIPN9JQAaufGjKdWduZn4U7wCtVuzKhmRkI0DFYHYRbB2H1w==}
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -5791,8 +5797,8 @@ packages:
   vue-component-type-helpers@2.1.6:
     resolution: {integrity: sha512-ng11B8B/ZADUMMOsRbqv0arc442q7lifSubD0v8oDXIFoMg/mXwAPUunrroIDkY+mcD0dHKccdaznSVp8EoX3w==}
 
-  vue-component-type-helpers@3.2.4:
-    resolution: {integrity: sha512-05lR16HeZDcDpB23ku5b5f1fBOoHqFnMiKRr2CiEvbG5Ux4Yi0McmQBOET0dR0nxDXosxyVqv67q6CzS3AK8rw==}
+  vue-component-type-helpers@3.2.5:
+    resolution: {integrity: sha512-tkvNr+bU8+xD/onAThIe7CHFvOJ/BO6XCOrxMzeytJq40nTfpGDJuVjyCM8ccGZKfAbGk2YfuZyDMXM56qheZQ==}
 
   vue-demi@0.14.10:
     resolution: {integrity: sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg==}
@@ -5853,6 +5859,11 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  vuedraggable@4.1.0:
+    resolution: {integrity: sha512-FU5HCWBmsf20GpP3eudURW3WdWTKIbEIQxh9/8GE806hydR9qZqRRxRE3RjqX7PkuLuMQG/A7n3cfj9rCEchww==}
+    peerDependencies:
+      vue: ^3.0.1
 
   vueuc@0.4.63:
     resolution: {integrity: sha512-QJT0z9yYWXdKpUq6f6IrAgJ83e34iTYMCVHjcAP8lCjldG0JzHnDfJYMpPWkNuLB5SdBZCbYGmYTKnTR+ff7CQ==}
@@ -8314,7 +8325,7 @@ snapshots:
       ts-dedent: 2.2.0
       type-fest: 2.19.0
       vue: 3.5.8(typescript@4.9.5)
-      vue-component-type-helpers: 3.2.4
+      vue-component-type-helpers: 3.2.5
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -12133,6 +12144,8 @@ snapshots:
 
   slash@3.0.0: {}
 
+  sortablejs@1.14.0: {}
+
   source-map-js@1.2.1: {}
 
   source-map-support@0.5.21:
@@ -12814,7 +12827,7 @@ snapshots:
 
   vue-component-type-helpers@2.1.6: {}
 
-  vue-component-type-helpers@3.2.4: {}
+  vue-component-type-helpers@3.2.5: {}
 
   vue-demi@0.14.10(vue@3.5.8(typescript@4.9.5)):
     dependencies:
@@ -12890,6 +12903,11 @@ snapshots:
       '@vue/shared': 3.5.8
     optionalDependencies:
       typescript: 4.9.5
+
+  vuedraggable@4.1.0(vue@3.5.8(typescript@4.9.5)):
+    dependencies:
+      sortablejs: 1.14.0
+      vue: 3.5.8(typescript@4.9.5)
 
   vueuc@0.4.63(vue@3.5.8(typescript@4.9.5)):
     dependencies:

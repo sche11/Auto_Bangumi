@@ -185,3 +185,98 @@ class TestUpdateCredentials:
                 except Exception:
                     # Expected - endpoint doesn't handle failure case properly
                     pass
+
+
+# ---------------------------------------------------------------------------
+# Refresh token: cookie-based username resolution
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshTokenCookieBehavior:
+    def test_refresh_with_no_cookie_raises_401(self, authed_client):
+        """GET /refresh_token with missing token cookie raises 401."""
+        # Override auth to allow route but provide no cookie token
+        with patch("module.api.auth.decode_token", return_value=None):
+            response = authed_client.get("/api/v1/auth/refresh_token")
+        assert response.status_code == 401
+
+    def test_refresh_with_valid_cookie_updates_active_user(self, authed_client):
+        """GET /refresh_token updates the active user timestamp."""
+        token = create_access_token(data={"sub": "testuser"})
+        authed_client.cookies.set("token", token)
+        active_users: dict = {}
+        with patch("module.api.auth.active_user", active_users):
+            response = authed_client.get("/api/v1/auth/refresh_token")
+        assert response.status_code == 200
+        assert "testuser" in active_users
+
+    def test_refresh_returns_new_token(self, authed_client):
+        """GET /refresh_token issues a valid JWT with bearer type."""
+        token = create_access_token(data={"sub": "testuser"})
+        authed_client.cookies.set("token", token)
+        with patch("module.api.auth.active_user", {}):
+            response = authed_client.get("/api/v1/auth/refresh_token")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["token_type"] == "bearer"
+        assert isinstance(data["access_token"], str)
+        assert len(data["access_token"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# Logout: per-user removal
+# ---------------------------------------------------------------------------
+
+
+class TestLogoutCookieBehavior:
+    def test_logout_removes_only_current_user(self, authed_client):
+        """GET /logout removes the current user from active_user, not others."""
+        token = create_access_token(data={"sub": "testuser"})
+        authed_client.cookies.set("token", token)
+        active_users = {
+            "testuser": datetime.now(),
+            "otheruser": datetime.now(),
+        }
+        with patch("module.api.auth.active_user", active_users):
+            response = authed_client.get("/api/v1/auth/logout")
+        assert response.status_code == 200
+        assert "testuser" not in active_users
+        assert "otheruser" in active_users
+
+    def test_logout_with_no_cookie_still_succeeds(self, authed_client):
+        """GET /logout with no cookie clears nothing but returns success."""
+        with patch("module.api.auth.decode_token", return_value=None):
+            with patch("module.api.auth.active_user", {}):
+                response = authed_client.get("/api/v1/auth/logout")
+        assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Update: cookie-based user resolution
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateCookieBehavior:
+    def test_update_with_no_cookie_raises_401(self, authed_client):
+        """POST /auth/update with no cookie raises 401."""
+        with patch("module.api.auth.decode_token", return_value=None):
+            response = authed_client.post(
+                "/api/v1/auth/update",
+                json={"old_password": "old", "new_password": "new"},
+            )
+        assert response.status_code == 401
+
+    def test_update_with_valid_cookie_succeeds(self, authed_client):
+        """POST /auth/update resolves username from cookie and issues new token."""
+        token = create_access_token(data={"sub": "testuser"})
+        authed_client.cookies.set("token", token)
+        with patch("module.api.auth.active_user", {"testuser": datetime.now()}):
+            with patch("module.api.auth.update_user_info", return_value=True):
+                response = authed_client.post(
+                    "/api/v1/auth/update",
+                    json={"old_password": "oldpass", "new_password": "newpass"},
+                )
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["message"] == "update success"

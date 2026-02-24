@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from module.models.config import Config
 
-from .const import ENV_TO_ATTR
+from .const import DEFAULT_SETTINGS, ENV_TO_ATTR
 
 logger = logging.getLogger(__name__)
 CONFIG_ROOT = Path("config")
@@ -27,6 +27,15 @@ CONFIG_PATH = (
 
 
 class Settings(Config):
+    """Runtime configuration singleton.
+
+    On construction, loads from ``CONFIG_PATH`` if the file exists (and
+    immediately re-saves to apply any migrations), otherwise bootstraps
+    defaults from environment variables via ``init()``.
+
+    Use ``settings`` module-level instance rather than instantiating directly.
+    """
+
     def __init__(self):
         super().__init__()
         if CONFIG_PATH.exists():
@@ -36,6 +45,7 @@ class Settings(Config):
             self.init()
 
     def load(self):
+        """Load and validate configuration from ``CONFIG_PATH``, applying migrations."""
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
         config = self._migrate_old_config(config)
@@ -65,20 +75,27 @@ class Settings(Config):
         for key in ("type", "custom_url", "token", "enable_tmdb"):
             rss_parser.pop(key, None)
 
+        # Add security section if missing (preserves local-network MCP default)
+        if "security" not in config:
+            config["security"] = DEFAULT_SETTINGS["security"]
+
         return config
 
     def save(self, config_dict: dict | None = None):
+        """Write configuration to ``CONFIG_PATH``. Uses current state when no dict supplied."""
         if not config_dict:
             config_dict = self.model_dump()
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(config_dict, f, indent=4, ensure_ascii=False)
 
     def init(self):
+        """Bootstrap a new config file from ``.env`` and environment variables."""
         load_dotenv(".env")
         self.__load_from_env()
         self.save()
 
     def __load_from_env(self):
+        """Apply ``ENV_TO_ATTR`` mappings from the process environment to the config dict."""
         config_dict = self.model_dump()
         for key, section in ENV_TO_ATTR.items():
             for env, attr in section.items():
@@ -97,12 +114,11 @@ class Settings(Config):
         logger.info("Config loaded from env")
 
     @staticmethod
-    def __val_from_env(env: str, attr: tuple):
+    def __val_from_env(env: str, attr: tuple | str):
+        """Return the environment variable value, applying the converter when attr is a tuple."""
         if isinstance(attr, tuple):
-            conv_func = attr[1]
-            return conv_func(os.environ[env])
-        else:
-            return os.environ[env]
+            return attr[1](os.environ[env])
+        return os.environ[env]
 
     @property
     def group_rules(self):

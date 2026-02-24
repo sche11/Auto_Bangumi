@@ -1,3 +1,46 @@
+# [Unreleased]
+
+## Backend
+
+### Added
+
+- 新增 `Security` 配置模型，支持登录 IP 白名单、MCP IP 白名单和 Bearer Token 认证
+- 新增登录端点 IP 白名单检查中间件 (`check_login_ip`)
+- MCP 安全中间件升级为可配置模式：支持 CIDR 白名单 + Bearer Token 双重认证
+- 认证端点支持 `Authorization: Bearer` 令牌绕过 Cookie 登录
+- 配置 API `_sanitize_dict` 修复：仅对字符串值进行脱敏，避免误处理非字符串字段
+
+- 新增番剧放送日手动设置 API (`PATCH /api/v1/bangumi/{id}/weekday`)，支持锁定放送日防止日历刷新覆盖
+- 数据库迁移 v9：`bangumi` 表新增 `weekday_locked` 列
+
+### Fixed
+
+- 修复 qBittorrent 下载器 SSL 连接问题：解耦 HTTPS 协议选择与证书验证，自签名证书不再导致连接失败 (#923)
+- 修复 `torrents_rename_file` 重命名验证循环中 `continue` 应为 `break` 的逻辑错误
+
+### Changed
+
+- 重构认证模块：提取 `_issue_token` 公共方法，消除 3 处重复的 JWT 签发逻辑
+- `get_current_user` 简化为三级认证（DEV 绕过 → Bearer Token → Cookie JWT）
+- `LocalNetworkMiddleware` 重命名为 `McpAccessMiddleware`，从硬编码 RFC 1918 改为读取配置
+
+### Tests
+
+- 新增 101 个单元测试覆盖安全、认证、配置、下载器和 MockDownloader 模块
+
+## Frontend
+
+### Added
+
+- 新增日历拖拽排列功能：可将「未知」番剧拖入星期列，自动设置放送日并锁定
+  - 拖入后显示紫色图钉图标，鼠标悬停显示取消按钮
+  - 锁定的番剧在日历刷新时不会被覆盖
+  - 使用 vuedraggable 实现流畅拖拽动画
+- 新增安全设置组件 (`config-security.vue`)，支持在 WebUI 中配置 IP 白名单和 Token
+- 前端 `Security` 类型定义和初始化配置
+
+---
+
 # [3.2.3] - 2026-02-23
 
 ## Backend

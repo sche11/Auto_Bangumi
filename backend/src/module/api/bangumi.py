@@ -41,6 +41,10 @@ class OffsetSuggestionDetail(BaseModel):
     confidence: Literal["high", "medium", "low"]
 
 
+class SetWeekdayRequest(BaseModel):
+    weekday: Optional[int] = None  # 0-6 for Mon-Sun, None to reset
+
+
 class DetectOffsetRequest(BaseModel):
     """Request body for detect-offset endpoint."""
     title: str
@@ -339,3 +343,41 @@ async def get_needs_review():
     """Get all bangumi that need review for offset mismatch."""
     with Database() as db:
         return db.bangumi.get_needs_review()
+
+
+@router.patch(
+    path="/{bangumi_id}/weekday",
+    response_model=APIResponse,
+    dependencies=[Depends(get_current_user)],
+)
+async def set_weekday(bangumi_id: int, request: SetWeekdayRequest):
+    """Manually set the broadcast weekday for a bangumi."""
+    if request.weekday is not None and not (0 <= request.weekday <= 6):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": False,
+                "msg_en": "Weekday must be 0-6 (Mon-Sun) or null.",
+                "msg_zh": "星期必须是 0-6（周一至周日）或空。",
+            },
+        )
+    with Database() as db:
+        success = db.bangumi.set_weekday(bangumi_id, request.weekday)
+    if success:
+        action = f"weekday {request.weekday}" if request.weekday is not None else "unknown"
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": True,
+                "msg_en": f"Set bangumi to {action}.",
+                "msg_zh": f"已设置放送日为 {action}。",
+            },
+        )
+    return JSONResponse(
+        status_code=404,
+        content={
+            "status": False,
+            "msg_en": f"Bangumi {bangumi_id} not found.",
+            "msg_zh": f"未找到番剧 {bangumi_id}。",
+        },
+    )

@@ -2,10 +2,6 @@ import type { TupleToUnion } from './utils';
 
 /** 下载方式 */
 export type DownloaderType = ['qbittorrent'];
-/** rss parser 源 */
-export type RssParserType = ['mikan'];
-/** rss parser 方法 */
-export type RssParserMethodType = ['tmdb', 'mikan', 'parser'];
 /** rss parser 语言 */
 export type RssParserLang = ['zh', 'en', 'jp'];
 /** 重命名方式 */
@@ -44,12 +40,8 @@ export interface Downloader {
 }
 export interface RssParser {
   enable: boolean;
-  type: TupleToUnion<RssParserType>;
-  token: string;
-  custom_url: string;
   filter: Array<string>;
   language: TupleToUnion<RssParserLang>;
-  parser_type: TupleToUnion<RssParserMethodType>;
 }
 export interface BangumiManage {
   enable: boolean;
@@ -105,6 +97,17 @@ export interface ExperimentalOpenAI {
   deployment_id?: string;
 }
 
+/** Access control for the login endpoint and MCP server.
+ *  Whitelist entries are IPv4/IPv6 CIDR strings (e.g. "192.168.0.0/16").
+ *  An empty login_whitelist allows all IPs; an empty mcp_whitelist denies all IP-based MCP access.
+ */
+export interface Security {
+  login_whitelist: string[];
+  login_tokens: string[];
+  mcp_whitelist: string[];
+  mcp_tokens: string[];
+}
+
 export interface Config {
   program: Program;
   downloader: Downloader;
@@ -114,6 +117,7 @@ export interface Config {
   proxy: Proxy;
   notification: Notification;
   experimental_openai: ExperimentalOpenAI;
+  security: Security;
 }
 
 export const initConfig: Config = {
@@ -132,12 +136,8 @@ export const initConfig: Config = {
   },
   rss_parser: {
     enable: true,
-    type: 'mikan',
-    token: '',
-    custom_url: '',
     filter: [],
     language: 'zh',
-    parser_type: 'parser',
   },
   bangumi_manage: {
     enable: true,
@@ -170,5 +170,11 @@ export const initConfig: Config = {
     api_type: 'openai',
     api_version: '2020-05-03',
     deployment_id: '',
+  },
+  security: {
+    login_whitelist: [],
+    login_tokens: [],
+    mcp_whitelist: [],
+    mcp_tokens: [],
   },
 };

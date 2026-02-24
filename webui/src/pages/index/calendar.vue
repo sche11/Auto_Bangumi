@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { ErrorPicture, Refresh } from '@icon-park/vue-next';
+import { ErrorPicture, Pin, Refresh } from '@icon-park/vue-next';
+import draggable from 'vuedraggable';
 import type { BangumiRule } from '#/bangumi';
 
 definePage({
@@ -9,7 +10,7 @@ definePage({
 const { t } = useMyI18n();
 const posterSrc = (link: string | null | undefined) => resolvePosterUrl(link);
 const { bangumi } = storeToRefs(useBangumiStore());
-const { getAll, openEditPopup } = useBangumiStore();
+const { getAll, openEditPopup, setWeekday } = useBangumiStore();
 const { isMobile } = useBreakpointQuery();
 
 const refreshing = ref(false);
@@ -127,6 +128,36 @@ function onRuleSelect(rule: BangumiRule) {
   ruleListPopup.show = false;
   openEditPopup(rule);
 }
+
+// Drag-and-drop state (desktop only)
+const isDragging = ref(false);
+
+async function onDropToDay(dayIndex: number, evt: any) {
+  if (evt.added) {
+    const group: BangumiGroup = evt.added.element;
+    for (const rule of group.rules) {
+      await setWeekday(rule.id, dayIndex);
+    }
+  }
+}
+
+async function onUnpin(group: BangumiGroup, event: Event) {
+  event.stopPropagation();
+  for (const rule of group.rules) {
+    await setWeekday(rule.id, null);
+  }
+}
+
+const unknownGroups = computed({
+  get: () => groupedBangumiByDay.value.unknown || [],
+  set: () => {
+    // No-op: actual update happens via API in onDropToDay
+  },
+});
+
+function getDayGroups(key: string) {
+  return groupedBangumiByDay.value[key] || [];
+}
 </script>
 
 <template>
@@ -165,6 +196,7 @@ function onRuleSelect(rule: BangumiRule) {
           class="calendar-column anim-slide-up"
           :class="{
             'calendar-column--today': isToday(index),
+            'calendar-column--drop-active': isDragging,
           }"
           :style="{ '--delay': `${index * 0.05}s` }"
         >
@@ -182,13 +214,103 @@ function onRuleSelect(rule: BangumiRule) {
             </span>
           </div>
 
-          <!-- Anime cards (grouped) -->
-          <div class="calendar-column-items">
-            <div
-              v-for="group in groupedBangumiByDay[key]"
-              :key="group.key"
-              class="calendar-card-wrapper"
-            >
+          <!-- Anime cards (grouped) - drop target -->
+          <draggable
+            :model-value="getDayGroups(key)"
+            group="calendar"
+            item-key="key"
+            :sort="false"
+            ghost-class="sortable-ghost"
+            drag-class="sortable-drag"
+            class="calendar-column-items"
+            @change="onDropToDay(index, $event)"
+          >
+            <template #item="{ element: group }">
+              <div class="calendar-card-wrapper">
+                <div
+                  class="calendar-card"
+                  :class="{ 'calendar-card--pinned': group.primary.weekday_locked }"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`Edit ${group.primary.official_title}`"
+                  @click="onCardClick(group)"
+                  @keydown.enter="onCardClick(group)"
+                >
+                  <div class="calendar-card-poster">
+                    <img
+                      v-if="group.primary.poster_link"
+                      :src="posterSrc(group.primary.poster_link)"
+                      :alt="group.primary.official_title"
+                      class="calendar-card-img"
+                      loading="lazy"
+                    />
+                    <div v-else class="calendar-card-placeholder">
+                      <ErrorPicture theme="outline" size="20" />
+                    </div>
+                    <div class="calendar-card-overlay">
+                      <div class="calendar-card-overlay-tags">
+                        <ab-tag :title="`S${group.primary.season}`" type="primary" />
+                        <ab-tag
+                          v-if="group.primary.group_name"
+                          :title="group.primary.group_name"
+                          type="primary"
+                        />
+                      </div>
+                      <div class="calendar-card-overlay-title">{{ group.primary.official_title }}</div>
+                    </div>
+                    <!-- Pin indicator for manually assigned -->
+                    <div v-if="group.primary.weekday_locked" class="calendar-card-pin">
+                      <Pin theme="filled" size="12" />
+                    </div>
+                  </div>
+                </div>
+                <!-- Unpin button -->
+                <button
+                  v-if="group.primary.weekday_locked"
+                  class="calendar-unpin-btn"
+                  :title="$t('calendar.unpin')"
+                  @click="onUnpin(group, $event)"
+                >
+                  &times;
+                </button>
+                <div v-if="group.rules.length > 1" class="group-badge">
+                  {{ group.rules.length }}
+                </div>
+              </div>
+            </template>
+
+            <template #footer>
+              <div v-if="getDayGroups(key).length === 0" class="calendar-empty-day">
+                {{ isDragging ? $t('calendar.drop_here') : $t('calendar.empty') }}
+              </div>
+            </template>
+          </draggable>
+        </div>
+      </div>
+
+      <!-- Unknown air day section (draggable source) -->
+      <div
+        v-if="unknownGroups.length > 0"
+        class="calendar-unknown-section anim-slide-up"
+        :style="{ '--delay': '0.4s' }"
+      >
+        <div class="calendar-unknown-header">
+          <span class="calendar-day-label">{{ getDayLabel('unknown') }}</span>
+          <span class="calendar-drag-hint">{{ $t('calendar.drag_hint') }}</span>
+        </div>
+        <draggable
+          v-model="unknownGroups"
+          :group="{ name: 'calendar', pull: 'clone', put: false }"
+          item-key="key"
+          :sort="false"
+          ghost-class="sortable-ghost"
+          drag-class="sortable-drag"
+          class="calendar-unknown-items"
+          @start="isDragging = true"
+          @end="isDragging = false"
+        >
+          <template #item="{ element: group }">
+            <div class="calendar-card-wrapper">
               <div
                 class="calendar-card"
                 role="button"
@@ -225,67 +347,8 @@ function onRuleSelect(rule: BangumiRule) {
                 {{ group.rules.length }}
               </div>
             </div>
-
-            <!-- Empty day -->
-            <div v-if="groupedBangumiByDay[key].length === 0" class="calendar-empty-day">
-              {{ $t('calendar.empty') }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Unknown air day section (separate from main grid) -->
-      <div
-        v-if="groupedBangumiByDay.unknown.length > 0"
-        class="calendar-unknown-section anim-slide-up"
-        :style="{ '--delay': '0.4s' }"
-      >
-        <div class="calendar-unknown-header">
-          <span class="calendar-day-label">{{ getDayLabel('unknown') }}</span>
-        </div>
-        <div class="calendar-unknown-items">
-          <div
-            v-for="group in groupedBangumiByDay.unknown"
-            :key="group.key"
-            class="calendar-card-wrapper"
-          >
-            <div
-              class="calendar-card"
-              role="button"
-              tabindex="0"
-              :aria-label="`Edit ${group.primary.official_title}`"
-              @click="onCardClick(group)"
-              @keydown.enter="onCardClick(group)"
-            >
-              <div class="calendar-card-poster">
-                <img
-                  v-if="group.primary.poster_link"
-                  :src="posterSrc(group.primary.poster_link)"
-                  :alt="group.primary.official_title"
-                  class="calendar-card-img"
-                  loading="lazy"
-                />
-                <div v-else class="calendar-card-placeholder">
-                  <ErrorPicture theme="outline" size="20" />
-                </div>
-                <div class="calendar-card-overlay">
-                  <div class="calendar-card-overlay-tags">
-                    <ab-tag :title="`S${group.primary.season}`" type="primary" />
-                    <ab-tag
-                      v-if="group.primary.group_name"
-                      :title="group.primary.group_name"
-                      type="primary"
-                    />
-                  </div>
-                  <div class="calendar-card-overlay-title">{{ group.primary.official_title }}</div>
-                </div>
-              </div>
-            </div>
-            <div v-if="group.rules.length > 1" class="group-badge">
-              {{ group.rules.length }}
-            </div>
-          </div>
-        </div>
+          </template>
+        </draggable>
       </div>
     </div>
 
@@ -681,6 +744,80 @@ function onRuleSelect(rule: BangumiRule) {
     font-size: 9px;
     padding: 1px 5px;
   }
+}
+
+// Drag hint text
+.calendar-drag-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+// Drop active state
+.calendar-column--drop-active {
+  border-color: var(--color-primary);
+  border-style: dashed;
+  background: var(--color-primary-light);
+}
+
+// Pin indicator
+.calendar-card-pin {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+// Unpin button
+.calendar-unpin-btn {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-danger, #e74c3c);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-dropdown);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+
+  .calendar-card-wrapper:hover & {
+    opacity: 1;
+  }
+}
+
+// Pinned card subtle styling
+.calendar-card--pinned {
+  box-shadow: 0 0 0 1.5px var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+// vuedraggable ghost and drag classes
+.sortable-ghost {
+  opacity: 0.4;
+}
+
+.sortable-drag {
+  opacity: 0.9;
+  box-shadow: var(--shadow-lg);
+  transform: rotate(2deg);
 }
 
 // Empty day

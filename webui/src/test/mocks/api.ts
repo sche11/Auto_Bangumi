@@ -49,6 +49,7 @@ export const mockBangumiAPI: BangumiAPI = {
   deleted: false,
   archived: false,
   air_weekday: 3,
+  weekday_locked: false,
   needs_review: false,
   needs_review_reason: null,
 };
