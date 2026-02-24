@@ -306,24 +306,23 @@ class TestIssue990NumberPrefixTitle:
 
     PROBLEM_TITLE = "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
 
-    def test_raw_parser_misparses_leading_number_as_episode(self):
-        """raw_parser matches leading '29 ' as episode number, losing the title."""
+    def test_raw_parser_correctly_parses_leading_number_title(self):
+        """raw_parser correctly parses title starting with number and extracts episode."""
         result = raw_parser(self.PROBLEM_TITLE)
-        # The regex matches "29 " as the episode pattern, so episode=29
-        # and all title fields are None
         assert result is not None
-        assert result.episode == 29
-        assert result.title_en is None
-        assert result.title_zh is None
-        assert result.title_jp is None
+        assert result.episode == 7
+        assert result.title_zh == "29 岁单身中坚冒险家的日常"
+        assert result.resolution == "1080P"
+        assert result.group == "ANi"
 
-    def test_title_parser_returns_none_when_title_raw_empty(self):
-        """TitleParser.raw_parser returns None when no title can be extracted."""
+    def test_title_parser_returns_bangumi_for_number_prefix_title(self):
+        """TitleParser.raw_parser returns a valid Bangumi for number-prefixed titles."""
         from module.parser.title_parser import TitleParser
 
         result = TitleParser.raw_parser(self.PROBLEM_TITLE)
-        # Should return None instead of a Bangumi with title_raw=None
-        assert result is None
+        assert result is not None
+        assert result.official_title == "29 岁单身中坚冒险家的日常"
+        assert result.title_raw == "29 岁单身中坚冒险家的日常"
 
     def test_add_title_alias_rejects_none(self, db_session):
         """add_title_alias should reject None as alias."""

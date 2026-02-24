@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 import httpx
@@ -25,8 +26,11 @@ class QbDownloader:
 
     async def auth(self, retry=3):
         times = 0
-        timeout = httpx.Timeout(connect=3.1, read=10.0, write=10.0, pool=10.0)
-        self._client = httpx.AsyncClient(timeout=timeout, verify=self.ssl)
+        use_https = self.host.startswith("https://")
+        timeout = httpx.Timeout(connect=5.0, read=10.0, write=10.0, pool=10.0)
+        # Never verify certificates - self-signed certs are the norm for
+        # home-server / NAS / Docker qBittorrent setups.
+        self._client = httpx.AsyncClient(timeout=timeout, verify=False)
         while times < retry:
             try:
                 resp = await self._client.post(
@@ -45,13 +49,26 @@ class QbDownloader:
                     )
                     await asyncio.sleep(5)
                     times += 1
-            except httpx.ConnectError:
-                logger.error("Cannot connect to qBittorrent Server")
+            except httpx.ConnectError as e:
+                if use_https:
+                    logger.error(
+                        "Cannot connect to qBittorrent Server via HTTPS. "
+                        "If your qBittorrent uses plain HTTP, disable SSL in download settings."
+                    )
+                else:
+                    logger.error("Cannot connect to qBittorrent Server")
                 logger.info("Please check the IP and port in WebUI settings")
+                logger.debug("Connection error detail: %s", e)
                 await asyncio.sleep(10)
                 times += 1
             except Exception as e:
-                logger.error(f"Unknown error: {e}")
+                if use_https and "ssl" in str(e).lower():
+                    logger.error(
+                        "TLS/SSL error connecting to qBittorrent. "
+                        "If your qBittorrent uses plain HTTP, disable SSL in download settings."
+                    )
+                else:
+                    logger.error(f"Unknown error: {e}")
                 break
         return False
 
@@ -82,7 +99,7 @@ class QbDownloader:
     async def prefs_init(self, prefs):
         resp = await self._client.post(
             self._url("app/setPreferences"),
-            data={"json": __import__("json").dumps(prefs)},
+            data={"json": json.dumps(prefs)},
         )
         return resp
 
@@ -171,7 +188,6 @@ class QbDownloader:
                     raise
 
     async def get_torrents_by_tag(self, tag: str) -> list[dict]:
-        """Get all torrents with a specific tag."""
         resp = await self._client.get(self._url("torrents/info"), params={"tag": tag})
         return resp.json()
 
@@ -221,9 +237,9 @@ class QbDownloader:
                     if f.get("name") == new_path:
                         return True
                     if f.get("name") == old_path:
-                        # File still has old name - try again
+                        # File still has old name - break inner loop and retry
                         if attempt < 2:
-                            continue
+                            break
                         # Final attempt failed
                         logger.debug(
                             "[Downloader] Rename API returned 200 but file unchanged: %s", old_path
@@ -257,8 +273,6 @@ class QbDownloader:
         return resp.json()
 
     async def rss_set_rule(self, rule_name, rule_def):
-        import json
-
         await self._client.post(
             self._url("rss/setRule"),
             data={"ruleName": rule_name, "ruleDef": json.dumps(rule_def)},

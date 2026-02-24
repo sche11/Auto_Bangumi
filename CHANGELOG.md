@@ -13,6 +13,11 @@
 - 新增番剧放送日手动设置 API (`PATCH /api/v1/bangumi/{id}/weekday`)，支持锁定放送日防止日历刷新覆盖
 - 数据库迁移 v9：`bangumi` 表新增 `weekday_locked` 列
 
+### Fixed
+
+- 修复 qBittorrent 下载器 SSL 连接问题：解耦 HTTPS 协议选择与证书验证，自签名证书不再导致连接失败 (#923)
+- 修复 `torrents_rename_file` 重命名验证循环中 `continue` 应为 `break` 的逻辑错误
+
 ### Changed
 
 - 重构认证模块：提取 `_issue_token` 公共方法，消除 3 处重复的 JWT 签发逻辑
